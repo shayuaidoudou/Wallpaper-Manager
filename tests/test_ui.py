@@ -6,7 +6,7 @@ from wallpaper_manager.ui.app import (
     can_apply,
     normalize_image_path,
 )
-from wallpaper_manager.ui.theme import ACCENT, ACCENT_2, BG, MUTED, PANEL, TEXT
+from wallpaper_manager.ui.theme import ACCENT, ACCENT_2, BG, MUTED, PANEL, SUCCESS, TEXT
 
 
 def test_midnight_glass_theme_constants():
@@ -18,6 +18,7 @@ def test_midnight_glass_theme_constants():
         "#faf5ff",
         "#b6a4d4",
     )
+    assert SUCCESS == "#d8b4fe"
 
 
 def test_apply_requires_installed_app_and_valid_image():

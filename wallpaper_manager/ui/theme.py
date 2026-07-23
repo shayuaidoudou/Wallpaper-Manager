@@ -16,8 +16,8 @@ MUTED = "#b6a4d4"
 PANEL_BORDER = "#3b2758"
 PANEL_BORDER_LIT = "#6d28d9"
 ERROR = "#fb7185"
-SUCCESS = "#34d399"
-GLOW = "#a855f766"
+SUCCESS = "#d8b4fe"  # lilac, keeps palette purple (not neon green)
+GLOW = "#a855f755"
 GLOW_SOFT = "#c084fc33"
 
 
@@ -34,15 +34,7 @@ def accent_gradient() -> ft.LinearGradient:
     return ft.LinearGradient(
         begin=ft.Alignment.TOP_LEFT,
         end=ft.Alignment.BOTTOM_RIGHT,
-        colors=["#e879f9", "#a855f7", "#7c3aed"],
-    )
-
-
-def title_gradient() -> ft.LinearGradient:
-    return ft.LinearGradient(
-        begin=ft.Alignment.CENTER_LEFT,
-        end=ft.Alignment.CENTER_RIGHT,
-        colors=["#f5d0fe", "#e879f9", "#a78bfa", "#c084fc"],
+        colors=["#f0abfc", "#e879f9", "#a855f7", "#7c3aed"],
     )
 
 
@@ -50,13 +42,13 @@ def glass_shadow() -> list[ft.BoxShadow]:
     return [
         ft.BoxShadow(
             spread_radius=0,
-            blur_radius=48,
-            color="#00000077",
-            offset=ft.Offset(0, 20),
+            blur_radius=32,
+            color="#00000066",
+            offset=ft.Offset(0, 14),
         ),
         ft.BoxShadow(
-            spread_radius=2,
-            blur_radius=36,
+            spread_radius=0,
+            blur_radius=24,
             color=GLOW,
             offset=ft.Offset(0, 0),
         ),
@@ -67,15 +59,20 @@ def soft_shadow() -> list[ft.BoxShadow]:
     return [
         ft.BoxShadow(
             spread_radius=0,
-            blur_radius=28,
-            color="#a855f744",
-            offset=ft.Offset(0, 10),
+            blur_radius=18,
+            color="#c084fc33",
+            offset=ft.Offset(0, 8),
         ),
+    ]
+
+
+def selected_shadow() -> list[ft.BoxShadow]:
+    return [
         ft.BoxShadow(
             spread_radius=0,
-            blur_radius=18,
-            color="#00000055",
-            offset=ft.Offset(0, 8),
+            blur_radius=22,
+            color="#e879f966",
+            offset=ft.Offset(0, 0),
         ),
     ]
 
@@ -88,7 +85,7 @@ def ambient_orb(
     left: float | None = None,
     right: float | None = None,
     bottom: float | None = None,
-    opacity: float = 0.85,
+    opacity: float = 0.55,
 ) -> ft.Container:
     return ft.Container(
         width=size,
@@ -100,11 +97,11 @@ def ambient_orb(
         border_radius=size,
         gradient=ft.RadialGradient(
             center=ft.Alignment.CENTER,
-            radius=0.8,
+            radius=0.85,
             colors=[color, "#00000000"],
         ),
-        animate_opacity=ft.Animation(1800, ft.AnimationCurve.EASE_IN_OUT),
-        animate_scale=ft.Animation(2200, ft.AnimationCurve.EASE_IN_OUT),
+        animate_opacity=ft.Animation(2000, ft.AnimationCurve.EASE_IN_OUT),
+        animate_scale=ft.Animation(2400, ft.AnimationCurve.EASE_IN_OUT),
         opacity=opacity,
         scale=1.0,
         ignore_interactions=True,

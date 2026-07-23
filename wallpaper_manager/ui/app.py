@@ -25,6 +25,7 @@ from wallpaper_manager.ui.theme import (
     ambient_orb,
     glass_shadow,
     page_gradient,
+    selected_shadow,
     soft_shadow,
 )
 
@@ -124,19 +125,19 @@ class WallpaperManagerUI:
             animate_scale=ft.Animation(160, ft.AnimationCurve.EASE_OUT),
         )
         self.shimmer = ft.Container(
-            width=90,
+            width=70,
             height=420,
-            left=-120,
+            left=-140,
             top=-20,
             gradient=ft.LinearGradient(
                 begin=ft.Alignment.CENTER_LEFT,
                 end=ft.Alignment.CENTER_RIGHT,
-                colors=["#ffffff00", "#ffffff33", "#ffffff00"],
+                colors=["#e879f900", "#f5d0fe55", "#e879f900"],
             ),
-            rotate=ft.Rotate(angle=-0.35, alignment=ft.Alignment.CENTER),
-            animate_position=ft.Animation(1800, ft.AnimationCurve.EASE_IN_OUT),
+            rotate=ft.Rotate(angle=-0.28, alignment=ft.Alignment.CENTER),
+            animate_position=ft.Animation(900, ft.AnimationCurve.EASE_IN_OUT),
             ignore_interactions=True,
-            opacity=0.55,
+            opacity=0,  # only visible during sweep — avoids stuck yellow bar
         )
         self.path_field = ft.TextField(
             label="图片路径",
@@ -180,7 +181,7 @@ class WallpaperManagerUI:
             bgcolor="#1a0f2888",
             on_click=self._on_clear,
             animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
-            ink=True,
+            ink=False,
         )
         self.apply_button = ft.Container(
             content=ft.Row(
@@ -198,7 +199,7 @@ class WallpaperManagerUI:
             shadow=soft_shadow(),
             on_click=self._on_apply,
             animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT_BACK),
-            ink=True,
+            ink=False,
         )
         self.apply_label = self.apply_button.content.controls[1]  # type: ignore[attr-defined]
         self.apply_icon = self.apply_button.content.controls[0]  # type: ignore[attr-defined]
@@ -254,7 +255,7 @@ class WallpaperManagerUI:
                     subtitle,
                     size=10,
                     weight=ft.FontWeight.W_600,
-                    color=SUCCESS if draft.installed else ERROR,
+                    color=ACCENT_2 if draft.installed else ERROR,
                 ),
             ],
             spacing=2,
@@ -271,12 +272,12 @@ class WallpaperManagerUI:
             border=ft.Border.all(
                 1.5 if selected else 1, ACCENT_2 if selected else PANEL_BORDER
             ),
-            shadow=soft_shadow() if selected else None,
+            shadow=selected_shadow() if selected else None,
             animate=ft.Animation(220, ft.AnimationCurve.EASE_OUT),
             animate_scale=ft.Animation(220, ft.AnimationCurve.EASE_OUT_BACK),
             scale=1.0,
             on_click=self._tab_click_handler(app_id),
-            ink=True,
+            ink=False,
             data=app_id,
         )
         self._tab_buttons[app_id] = tab
@@ -298,8 +299,8 @@ class WallpaperManagerUI:
             tab.border = ft.Border.all(
                 1.5 if selected else 1, ACCENT_2 if selected else PANEL_BORDER
             )
-            tab.shadow = soft_shadow() if selected else None
-            tab.scale = 1.06 if selected else 1.0
+            tab.shadow = selected_shadow() if selected else None
+            tab.scale = 1.04 if selected else 1.0
             col = tab.content
             assert isinstance(col, ft.Column)
             title, status = col.controls
@@ -308,7 +309,7 @@ class WallpaperManagerUI:
             title.color = TEXT if selected else MUTED
             title.value = APP_NAMES[app_id]
             status.value = "ONLINE" if draft.installed else "OFFLINE"
-            status.color = SUCCESS if draft.installed else ERROR
+            status.color = ACCENT_2 if draft.installed else ERROR
 
     async def _select_tab(self, app_id: AppId) -> None:
         if app_id == self.active_app:
@@ -325,11 +326,7 @@ class WallpaperManagerUI:
         self.main_panel.offset = ft.Offset(0, 0)
         self.main_panel.scale = 1
         self.page.update()
-        self.shimmer.left = -120
-        self.page.update()
-        await asyncio.sleep(0.02)
-        self.shimmer.left = 980
-        self.page.update()
+        await self._run_shimmer()
 
     def build(self) -> ft.Control:
         installed_count = sum(draft.installed for draft in self.drafts.values())
@@ -422,7 +419,7 @@ class WallpaperManagerUI:
                 ],
                 fit=ft.StackFit.EXPAND,
             ),
-            height=390,
+            height=260,
             border_radius=24,
             clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
             border=ft.Border.all(1.5, ACCENT_DIM),
@@ -444,7 +441,7 @@ class WallpaperManagerUI:
             bgcolor="#a855f722",
             on_click=self._on_browse,
             animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT_BACK),
-            ink=True,
+            ink=False,
         )
 
         controls = ft.Column(
@@ -504,9 +501,9 @@ class WallpaperManagerUI:
             expand=True,
         )
 
-        self.orb_a = ambient_orb(size=360, color="#a855f755", top=-80, right=-60)
-        self.orb_b = ambient_orb(size=300, color="#e879f933", bottom=-100, left=-70)
-        self.orb_c = ambient_orb(size=200, color="#7c3aed44", top=200, left=460)
+        self.orb_a = ambient_orb(size=280, color="#a855f733", top=-90, right=-40, opacity=0.5)
+        self.orb_b = ambient_orb(size=240, color="#e879f922", bottom=-80, left=-50, opacity=0.45)
+        self.orb_c = ambient_orb(size=160, color="#c084fc28", top=220, left=520, opacity=0.4)
 
         self.root_shell = ft.Container(
             expand=True,
@@ -527,10 +524,23 @@ class WallpaperManagerUI:
         self._refresh_tabs()
         return self.root_shell
 
+    async def _run_shimmer(self) -> None:
+        self.shimmer.left = -140
+        self.shimmer.opacity = 0.7
+        self.page.update()
+        await asyncio.sleep(0.03)
+        self.shimmer.left = 980
+        self.page.update()
+        await asyncio.sleep(0.95)
+        self.shimmer.opacity = 0
+        self.shimmer.left = -140
+        self.page.update()
+
     async def _play_entrance(self) -> None:
         await asyncio.sleep(0.04)
         self.root_shell.opacity = 1
         self.page.update()
+        await self._run_shimmer()
         if not self._motion_running:
             self._motion_running = True
             self.page.run_task(self._ambient_motion_loop)
@@ -538,23 +548,19 @@ class WallpaperManagerUI:
     async def _ambient_motion_loop(self) -> None:
         pulse = True
         while self._motion_running:
-            self.orb_a.opacity = 0.95 if pulse else 0.45
-            self.orb_a.scale = 1.08 if pulse else 0.92
-            self.orb_b.opacity = 0.5 if pulse else 0.9
-            self.orb_b.scale = 0.9 if pulse else 1.12
-            self.orb_c.opacity = 0.85 if pulse else 0.4
-            self.orb_c.scale = 1.15 if pulse else 0.88
-            self.title_glow.opacity = 1.0 if pulse else 0.72
-            self.preview_badge.scale = 1.05 if pulse else 0.96
+            self.orb_a.opacity = 0.62 if pulse else 0.32
+            self.orb_a.scale = 1.06 if pulse else 0.94
+            self.orb_b.opacity = 0.35 if pulse else 0.55
+            self.orb_b.scale = 0.94 if pulse else 1.08
+            self.orb_c.opacity = 0.5 if pulse else 0.28
+            self.orb_c.scale = 1.1 if pulse else 0.9
+            self.title_glow.opacity = 1.0 if pulse else 0.78
+            self.preview_badge.scale = 1.04 if pulse else 0.97
             self.page.update()
             pulse = not pulse
-            await asyncio.sleep(1.7)
+            await asyncio.sleep(2.0)
             if pulse:
-                self.shimmer.left = -120
-                self.page.update()
-                await asyncio.sleep(0.05)
-                self.shimmer.left = 980
-                self.page.update()
+                await self._run_shimmer()
 
     def _on_path_change(self, event: ft.Event[ft.TextField]) -> None:
         path = event.control.value.strip()
@@ -664,13 +670,14 @@ class WallpaperManagerUI:
             else ""
         )
         self.preview_image.visible = has_valid_image
+        # Keep preview readable even when apply opacity is 0%.
         self.preview_image.opacity = (
-            (draft.opacity_ui / 100) if has_valid_image else 1.0
+            max(0.22, draft.opacity_ui / 100) if has_valid_image else 1.0
         )
         self.opacity_label.value = f"{draft.opacity_ui}%"
         chip_text = self.opacity_chip.content
         assert isinstance(chip_text, ft.Text)
-        chip_text.value = f"{draft.opacity_ui}%"
+        chip_text.value = f"应用 {draft.opacity_ui}%"
         self.preview_badge.opacity = 1 if has_valid_image else 0.55
         if draft.validation_error:
             self.preview_message.value = draft.validation_error
@@ -702,6 +709,11 @@ def main(page: ft.Page) -> None:
     page.title = "Wallpaper Manager"
     page.bgcolor = BG
     page.theme_mode = ft.ThemeMode.DARK
+    page.theme = ft.Theme(
+        color_scheme_seed=ACCENT,
+        splash_color="#e879f944",
+        highlight_color="#c084fc33",
+    )
     page.padding = 0
     page.window.width = 1020
     page.window.height = 860
