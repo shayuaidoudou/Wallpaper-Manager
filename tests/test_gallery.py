@@ -1,12 +1,33 @@
 import asyncio
 import json
 
+import httpx
+
 from wallpaper_manager.gallery.decrypt import decrypt_blob, encrypt_blob
 from wallpaper_manager.gallery.models import GalleryItem
 from wallpaper_manager.gallery.nuanxin_client import (
     NuanxinGalleryClient,
     build_cdn_url,
+    friendly_network_error,
 )
+
+
+def test_friendly_network_error_forbidden():
+    request = httpx.Request("GET", "https://wallpaper.061129.xyz/data/desktop/index.json")
+    response = httpx.Response(403, request=request)
+    exc = httpx.HTTPStatusError("403", request=request, response=response)
+    msg = friendly_network_error(exc)
+    assert "节点" in msg and "直连" in msg
+
+
+def test_friendly_network_error_connect():
+    exc = httpx.ConnectError("boom")
+    msg = friendly_network_error(exc)
+    assert "节点" in msg
+
+
+def test_friendly_network_error_passthrough():
+    assert friendly_network_error(ValueError("plain")) == "plain"
 
 
 def test_encrypt_decrypt_roundtrip():

@@ -27,6 +27,29 @@ DEFAULT_HEADERS = {
 }
 
 
+_PROXY_HINT = "当前代理节点无法访问图库，请更换节点或改用直连后重试。"
+
+
+def friendly_network_error(exc: Exception) -> str:
+    """Translate httpx/network errors into an actionable Chinese message."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        if code in (401, 403, 407, 451):
+            return _PROXY_HINT
+        if code == 429:
+            return "访问过于频繁，请稍后再试。"
+        if code >= 500:
+            return "图库服务暂时不可用，请稍后再试。"
+        return f"{_PROXY_HINT}（HTTP {code}）"
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout)):
+        return _PROXY_HINT
+    if isinstance(exc, httpx.ProxyError):
+        return _PROXY_HINT
+    if isinstance(exc, httpx.HTTPError):
+        return _PROXY_HINT
+    return str(exc)
+
+
 def build_cdn_url(item: GalleryItem, *, kind: str = "path") -> str:
     if kind == "thumbnail":
         path = item.thumbnail_path or item.path

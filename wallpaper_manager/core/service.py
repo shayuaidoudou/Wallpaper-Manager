@@ -19,7 +19,10 @@ from wallpaper_manager.core.path_config import (
 )
 from wallpaper_manager.core.state_store import StateStore
 from wallpaper_manager.gallery.models import GalleryItem
-from wallpaper_manager.gallery.nuanxin_client import NuanxinGalleryClient
+from wallpaper_manager.gallery.nuanxin_client import (
+    NuanxinGalleryClient,
+    friendly_network_error,
+)
 
 DEFAULT_OPACITY_UI = 20
 
@@ -223,7 +226,7 @@ class WallpaperService:
                 None,
                 opacity_ui,
                 self._detect(adapter) if adapter else False,
-                f"下载失败：{exc}",
+                f"下载失败：{friendly_network_error(exc)}",
             )
         if owns:
             await gallery.aclose()

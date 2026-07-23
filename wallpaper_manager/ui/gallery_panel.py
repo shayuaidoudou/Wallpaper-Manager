@@ -9,7 +9,11 @@ import flet as ft
 from wallpaper_manager.core.models import AppId
 from wallpaper_manager.core.service import WallpaperService
 from wallpaper_manager.gallery.models import GalleryItem
-from wallpaper_manager.gallery.nuanxin_client import NuanxinGalleryClient, build_cdn_url
+from wallpaper_manager.gallery.nuanxin_client import (
+    NuanxinGalleryClient,
+    build_cdn_url,
+    friendly_network_error,
+)
 from wallpaper_manager.ui import motion as m
 from wallpaper_manager.ui.theme import (
     ACCENT,
@@ -108,7 +112,7 @@ class GalleryPanel:
                 self._selected_category = self._categories[0]
             await self._load_category(self._selected_category)
         except Exception as exc:
-            self.status_text.value = f"加载失败：{exc}"
+            self.status_text.value = f"加载失败：{friendly_network_error(exc)}"
             self.status_text.color = ERROR
             self.page.update()
 
@@ -233,7 +237,7 @@ class GalleryPanel:
         except Exception as exc:
             if token != self._load_token:
                 return
-            self.status_text.value = f"加载「{name}」失败：{exc}"
+            self.status_text.value = f"加载「{name}」失败：{friendly_network_error(exc)}"
             self.status_text.color = ERROR
         self.page.update()
 
@@ -351,7 +355,7 @@ class GalleryPanel:
                 if isinstance(back, Awaitable):
                     await back
             except Exception as exc:
-                await self._emit_toast(f"失败：{exc}", ERROR)
+                await self._emit_toast(f"失败：{friendly_network_error(exc)}", ERROR)
             finally:
                 button.content = original
                 self._busy = False
