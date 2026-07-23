@@ -13,6 +13,7 @@ from wallpaper_manager.core.models import AppId
 from wallpaper_manager.core.service import WallpaperService, build_default_service
 from wallpaper_manager.ui import motion as m
 from wallpaper_manager.ui.settings_panel import SettingsPanel
+from wallpaper_manager.ui.gallery_panel import GalleryPanel
 from wallpaper_manager.ui.theme import (
     ACCENT,
     ACCENT_2,
@@ -39,7 +40,6 @@ from wallpaper_manager.ui.theme import (
     frame_aura,
     glass_chip,
     glow,
-    hairline_rule,
     micro_label,
     opa,
     page_gradient,
@@ -107,10 +107,14 @@ class WallpaperManagerUI:
         self._toast_token = 0
         self._last_preview_src = ""
         self._showing_settings = False
+        self._showing_gallery = False
         self.settings_panel: SettingsPanel | None = None
+        self.gallery_panel: GalleryPanel | None = None
         self.main_view: ft.Container
         self.settings_view: ft.Container
+        self.gallery_view: ft.Container
         self.settings_button: ft.Container
+        self.gallery_button: ft.Container
 
         self.preview_image = ft.Image(
             src="",
@@ -264,7 +268,7 @@ class WallpaperManagerUI:
             expand=True,
         )
         self.opacity_label = ft.AnimatedSwitcher(
-            content=ft.Text("25%", color=ACCENT_2, weight=ft.FontWeight.W_700, size=14),
+            content=ft.Text("25%", color=ACCENT_2, weight=ft.FontWeight.W_700, size=15),
             transition=ft.AnimatedSwitcherTransition.FADE,
             duration=180,
             reverse_duration=120,
@@ -280,12 +284,29 @@ class WallpaperManagerUI:
             on_change_end=self._on_opacity_settle,
             expand=True,
         )
+        self.opacity_value_chip = ft.Container(
+            content=self.opacity_label,
+            padding=ft.Padding.symmetric(horizontal=14, vertical=8),
+            border_radius=12,
+            bgcolor=opa(0.18, ACCENT),
+            border=ft.Border.all(1, opa(0.45, ACCENT)),
+            alignment=ft.Alignment.CENTER,
+        )
         self.opacity_slider_well = ft.Container(
-            content=ft.Container(
-                content=self.opacity_slider,
-                padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+            content=ft.Row(
+                [
+                    ft.Container(
+                        content=self.opacity_slider,
+                        expand=True,
+                        padding=ft.Padding.only(left=4, right=8, top=2, bottom=2),
+                        alignment=ft.Alignment.CENTER_LEFT,
+                    ),
+                    self.opacity_value_chip,
+                ],
+                spacing=10,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
             border_radius=16,
             bgcolor=TRACK,
             border=ft.Border.all(1, HAIRLINE),
@@ -575,6 +596,17 @@ class WallpaperManagerUI:
             border=ft.Border.all(1, HAIRLINE),
             ink=False,
         )
+        self.gallery_button = ft.Container(
+            content=ft.Icon(ft.Icons.PHOTO_LIBRARY_ROUNDED, size=17, color=ACCENT_2),
+            width=38,
+            height=38,
+            border_radius=19,
+            alignment=ft.Alignment.CENTER,
+            bgcolor=SURFACE,
+            border=ft.Border.all(1, HAIRLINE),
+            ink=False,
+            tooltip="在线图库",
+        )
 
         status_chip = glass_chip(
             ft.Row(
@@ -609,6 +641,7 @@ class WallpaperManagerUI:
                         tight=True,
                     ),
                     ft.Container(expand=True),
+                    self.gallery_button,
                     self.settings_button,
                     status_chip,
                 ],
@@ -682,15 +715,7 @@ class WallpaperManagerUI:
                 micro_label("Image Source"),
                 ft.Row([self.path_field, self.browse_button], spacing=SPACE_SM),
                 ft.Container(height=SPACE_SM),
-                ft.Row(
-                    [
-                        micro_label("Opacity"),
-                        hairline_rule(),
-                        self.opacity_label,
-                    ],
-                    spacing=SPACE_SM,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
+                micro_label("Opacity"),
                 self.opacity_slider_well,
                 ft.Text(
                     "0% 完全透明 · 100% 完全不透明 · 编辑器主题底色会透出",
@@ -745,6 +770,24 @@ class WallpaperManagerUI:
             opacity=0,
             animate_opacity=m.PANEL,
         )
+        self.gallery_panel = GalleryPanel(
+            self.page,
+            self.service,
+            APP_NAMES,
+            active_app=lambda: self.active_app,
+            opacity_for=lambda app_id: self.drafts[app_id].opacity_ui,
+            on_back=self._show_main,
+            on_applied=self._on_gallery_applied,
+            on_toast=self._toast_from_settings,
+        )
+        self.gallery_view = ft.Container(
+            content=self.gallery_panel.control(),
+            padding=ft.Padding.symmetric(horizontal=36, vertical=28),
+            expand=True,
+            visible=False,
+            opacity=0,
+            animate_opacity=m.PANEL,
+        )
 
         self.aurora = aurora_band()
         self.orb_a = soft_orb(
@@ -776,6 +819,7 @@ class WallpaperManagerUI:
                     *self.sparks,
                     self.main_view,
                     self.settings_view,
+                    self.gallery_view,
                     self.toast,
                 ],
                 expand=True,
@@ -786,6 +830,13 @@ class WallpaperManagerUI:
             self.settings_button,
             page=self.page,
             on_click=self._show_settings,
+            hover_scale=1.06,
+            press_scale=0.94,
+        )
+        m.wire_pressable(
+            self.gallery_button,
+            page=self.page,
+            on_click=self._show_gallery,
             hover_scale=1.06,
             press_scale=0.94,
         )
@@ -821,30 +872,68 @@ class WallpaperManagerUI:
         if self.settings_panel is None:
             return
         self._showing_settings = True
+        self._showing_gallery = False
         self.settings_panel.reload()
+        await self._swap_to_overlay(self.settings_view)
+
+    async def _show_gallery(self, _event: ft.ControlEvent | None = None) -> None:
+        if self.gallery_panel is None:
+            return
+        self._showing_gallery = True
+        self._showing_settings = False
+        await self._swap_to_overlay(self.gallery_view)
+        await self.gallery_panel.reload()
+
+    async def _swap_to_overlay(self, overlay: ft.Container) -> None:
         self.main_view.opacity = 0
         self.page.update()
         await asyncio.sleep(0.08)
         self.main_view.visible = False
-        self.settings_view.visible = True
+        self.settings_view.visible = False
+        self.gallery_view.visible = False
         self.settings_view.opacity = 0
+        self.gallery_view.opacity = 0
+        overlay.visible = True
+        overlay.opacity = 0
         self.page.update()
         await asyncio.sleep(0.016)
-        self.settings_view.opacity = 1
+        overlay.opacity = 1
         self.page.update()
 
     async def _show_main(self, _event: ft.ControlEvent | None = None) -> None:
         self._showing_settings = False
+        self._showing_gallery = False
         self.settings_view.opacity = 0
+        self.gallery_view.opacity = 0
         self.page.update()
         await asyncio.sleep(0.08)
         self.settings_view.visible = False
+        self.gallery_view.visible = False
         self.main_view.visible = True
         self.main_view.opacity = 0
         self.page.update()
         await asyncio.sleep(0.016)
         self.main_view.opacity = 1
         self.page.update()
+
+    async def _on_gallery_applied(
+        self, app_id: AppId, image_path: str, opacity_ui: int
+    ) -> None:
+        draft = self.drafts[app_id]
+        draft.image_path = image_path
+        draft.opacity_ui = opacity_ui
+        draft.validation_error = None
+        tip = self.service.extension_tip(app_id)
+        if tip:
+            draft.last_error = tip
+        else:
+            draft.last_error = None
+        if app_id == self.active_app:
+            self._load_active_draft(animate_preview=True)
+        else:
+            self.active_app = app_id
+            self._refresh_tabs()
+            self._load_active_draft(animate_preview=True)
 
     def _reload_after_path_change(self) -> None:
         states = self.service.bootstrap()
@@ -1029,7 +1118,7 @@ class WallpaperManagerUI:
             f"{value}%",
             color=ACCENT_2,
             weight=ft.FontWeight.W_700,
-            size=14,
+            size=15,
         )
 
     def _refresh_preview(self, *, animate_image: bool = False) -> None:
@@ -1138,10 +1227,24 @@ def main(page: ft.Page) -> None:
     page.window.height = 840
     page.window.min_width = 880
     page.window.min_height = 700
+    # Window / task-switcher icon (Dock icon for packaged .app comes from --icon).
+    icon_path = _resolve_app_icon()
+    if icon_path is not None:
+        page.window.icon = str(icon_path)
     ui = WallpaperManagerUI(page, build_default_service())
     page.add(ui.build())
     page.run_task(ui._play_entrance)
 
 
+def _resolve_app_icon() -> Path | None:
+    root = Path(__file__).resolve().parents[2]
+    for name in ("icon.png", "icon.icns", "shayu.jpg"):
+        candidate = root / "assets" / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def run_app() -> None:
-    ft.run(main)
+    assets = Path(__file__).resolve().parents[2] / "assets"
+    ft.run(main, assets_dir=str(assets) if assets.is_dir() else "assets")

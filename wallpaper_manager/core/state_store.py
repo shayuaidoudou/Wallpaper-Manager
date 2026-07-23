@@ -6,6 +6,7 @@ from pathlib import Path
 from wallpaper_manager.core.models import AppId
 
 DEFAULT_CONFIG_PATH = Path.home() / ".wallpaper-manager" / "config.json"
+DEFAULT_GALLERY_DOWNLOAD_DIR = Path.home() / "Pictures" / "WallpaperManager"
 
 
 class StateStore:
@@ -51,6 +52,29 @@ class StateStore:
         data["paths"] = paths
         self._write_raw(data)
 
+    def load_gallery_download_dir(self) -> Path:
+        raw = self._read_raw()
+        gallery = raw.get("gallery")
+        if isinstance(gallery, dict):
+            value = gallery.get("download_dir")
+            if isinstance(value, str) and value.strip():
+                return Path(value.strip()).expanduser()
+        return DEFAULT_GALLERY_DOWNLOAD_DIR
+
+    def save_gallery_download_dir(self, download_dir: str | Path | None) -> Path:
+        data = self._read_raw()
+        gallery = data.setdefault("gallery", {})
+        if download_dir is None or not str(download_dir).strip():
+            gallery.pop("download_dir", None)
+            data["gallery"] = gallery
+            self._write_raw(data)
+            return DEFAULT_GALLERY_DOWNLOAD_DIR
+        path = Path(str(download_dir).strip()).expanduser()
+        gallery["download_dir"] = str(path)
+        data["gallery"] = gallery
+        self._write_raw(data)
+        return path
+
     def save_app(self, app_id: AppId, image_path: str, opacity_ui: int) -> None:
         data = self._read_raw()
         data.setdefault("apps", {})[app_id.value] = {
@@ -68,17 +92,19 @@ class StateStore:
 
     def _read_raw(self) -> dict:
         if not self._path.exists():
-            return {"version": 1, "apps": {}, "paths": {}}
+            return {"version": 1, "apps": {}, "paths": {}, "gallery": {}}
         raw = json.loads(self._path.read_text(encoding="utf-8"))
         raw.setdefault("version", 1)
         raw.setdefault("apps", {})
         raw.setdefault("paths", {})
+        raw.setdefault("gallery", {})
         return raw
 
     def _write_raw(self, data: dict) -> None:
         data.setdefault("version", 1)
         data.setdefault("apps", {})
         data.setdefault("paths", {})
+        data.setdefault("gallery", {})
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(
             json.dumps(data, indent=2, ensure_ascii=False) + "\n",

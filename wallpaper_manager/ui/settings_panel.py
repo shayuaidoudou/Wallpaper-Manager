@@ -14,6 +14,7 @@ from wallpaper_manager.core.path_config import (
     resolve_config_from_user_selection,
 )
 from wallpaper_manager.core.service import WallpaperService
+from wallpaper_manager.core.state_store import DEFAULT_GALLERY_DOWNLOAD_DIR
 from wallpaper_manager.ui import motion as m
 from wallpaper_manager.ui.theme import (
     ACCENT,
@@ -53,6 +54,7 @@ class SettingsPanel:
         self._fields: dict[AppId, ft.TextField] = {}
         self._status: dict[AppId, ft.Text] = {}
         self._resolved: dict[AppId, ft.Text] = {}
+        self.gallery_dir_field: ft.TextField
         self.file_picker = ft.FilePicker()
         self.page.services.append(self.file_picker)
         self.root = self._build()
@@ -61,6 +63,7 @@ class SettingsPanel:
         return self.root
 
     def reload(self) -> None:
+        self.gallery_dir_field.value = str(self.service.gallery_download_dir())
         for app_id in self.app_order:
             info = self.service.path_info(app_id)
             field = self._fields[app_id]
@@ -80,7 +83,7 @@ class SettingsPanel:
         return f"{mode} · {state} · 目标文件：{info.label}"
 
     def _build(self) -> ft.Control:
-        rows: list[ft.Control] = []
+        rows: list[ft.Control] = [self._build_gallery_dir_section()]
         for app_id in self.app_order:
             info = self.service.path_info(app_id)
             field = ft.TextField(
@@ -241,6 +244,111 @@ class SettingsPanel:
             padding=8,
             radius=30,
         )
+
+    def _build_gallery_dir_section(self) -> ft.Control:
+        self.gallery_dir_field = ft.TextField(
+            value=str(self.service.gallery_download_dir()),
+            hint_text=str(DEFAULT_GALLERY_DOWNLOAD_DIR),
+            label="在线图库下载目录",
+            label_style=ft.TextStyle(color=MUTED, size=11),
+            color=TEXT,
+            bgcolor=opa(0.88, "#0c0916"),
+            border_color=PANEL_BORDER,
+            focused_border_color=ACCENT,
+            border_radius=14,
+            filled=True,
+            cursor_color=ACCENT,
+            expand=True,
+        )
+        browse = ft.Container(
+            content=ft.Text("选择目录", color=ACCENT_2, weight=ft.FontWeight.W_700),
+            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
+            border_radius=14,
+            border=ft.Border.all(1, ACCENT),
+            bgcolor=opa(0.12, ACCENT),
+            ink=False,
+        )
+        reset = ft.Container(
+            content=ft.Text("默认", color=MUTED, weight=ft.FontWeight.W_600),
+            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
+            border_radius=14,
+            border=ft.Border.all(1, PANEL_BORDER),
+            bgcolor=opa(0.4, "#120e1c"),
+            ink=False,
+        )
+        save = ft.Container(
+            content=ft.Text("保存", color=TEXT, weight=ft.FontWeight.W_700),
+            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
+            border_radius=14,
+            bgcolor=opa(0.22, ACCENT),
+            border=ft.Border.all(1, ACCENT),
+            ink=False,
+        )
+        m.wire_pressable(
+            browse,
+            page=self.page,
+            on_click=self._browse_gallery_dir,
+            hover_scale=1.02,
+            press_scale=0.97,
+        )
+        m.wire_pressable(
+            reset,
+            page=self.page,
+            on_click=self._reset_gallery_dir,
+            hover_scale=1.02,
+            press_scale=0.97,
+        )
+        m.wire_pressable(
+            save,
+            page=self.page,
+            on_click=self._save_gallery_dir,
+            hover_scale=1.02,
+            press_scale=0.97,
+        )
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text("壁纸下载", size=14, weight=ft.FontWeight.W_700, color=TEXT),
+                    ft.Text(
+                        "在线图库「设为壁纸」时原图保存到此目录",
+                        size=11,
+                        color=MUTED,
+                    ),
+                    ft.Row([self.gallery_dir_field, browse], spacing=8),
+                    ft.Row([reset, save], spacing=8),
+                ],
+                spacing=8,
+            ),
+            padding=14,
+            border_radius=16,
+            border=ft.Border.all(1, HAIRLINE),
+            bgcolor=opa(0.35, "#141022"),
+        )
+
+    async def _browse_gallery_dir(self, _event: ft.ControlEvent) -> None:
+        directory = await self.file_picker.get_directory_path(
+            dialog_title="选择壁纸下载目录",
+        )
+        if not directory:
+            return
+        self.gallery_dir_field.value = directory
+        self.page.update()
+
+    async def _save_gallery_dir(self, _event: ft.ControlEvent) -> None:
+        raw = (self.gallery_dir_field.value or "").strip()
+        try:
+            path = self.service.set_gallery_download_dir(raw or None)
+            self.gallery_dir_field.value = str(path)
+            self.page.update()
+            await self._emit_toast(f"已保存下载目录：{path}", SUCCESS)
+        except Exception as exc:
+            await self._emit_toast(f"保存失败：{exc}", ERROR)
+
+    async def _reset_gallery_dir(self, _event: ft.ControlEvent) -> None:
+        path = self.service.set_gallery_download_dir(None)
+        self.gallery_dir_field.value = str(path)
+        self.page.update()
+        await self._emit_toast("已恢复默认下载目录", SUCCESS)
 
     def _browse_handler(self, app_id: AppId):
         async def _handler(_event: ft.ControlEvent) -> None:

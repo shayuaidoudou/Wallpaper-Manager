@@ -1,6 +1,6 @@
 [project]
 name = "wallpaper-manager"
-version = "0.1.0"
+version = "0.2.0"
 description = "Unified wallpaper manager for VS Code, Cursor, IDEA, PyCharm, and Ghostty"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -35,6 +35,7 @@ classifiers = [
 dependencies = [
   "flet>=0.27.0",
   "pillow>=10.0.0",
+  "httpx>=0.27.0",
 ]
 
 [project.urls]
@@ -63,6 +64,10 @@ copyright = "Copyright (c) 2026 shayuaidoudou"
 
 [tool.flet.app]
 module = "main"
+
+# Used by `flet build` when Flutter toolchain is available.
+[tool.flet.macos]
+icon = "assets/icon.png"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

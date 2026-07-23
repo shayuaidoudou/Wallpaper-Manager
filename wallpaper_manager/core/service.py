@@ -18,6 +18,8 @@ from wallpaper_manager.core.path_config import (
     resolve_config_from_user_selection,
 )
 from wallpaper_manager.core.state_store import StateStore
+from wallpaper_manager.gallery.models import GalleryItem
+from wallpaper_manager.gallery.nuanxin_client import NuanxinGalleryClient
 
 DEFAULT_OPACITY_UI = 20
 
@@ -188,6 +190,44 @@ class WallpaperService:
         if callable(setter):
             setter(Path(cleaned) if cleaned else None)
         return self.path_info(app_id)
+
+    def gallery_download_dir(self) -> Path:
+        return self.store.load_gallery_download_dir()
+
+    def set_gallery_download_dir(self, download_dir: str | None) -> Path:
+        if download_dir and download_dir.strip():
+            path = Path(download_dir.strip()).expanduser().resolve()
+            path.mkdir(parents=True, exist_ok=True)
+            return self.store.save_gallery_download_dir(path)
+        return self.store.save_gallery_download_dir(None)
+
+    async def apply_gallery_item(
+        self,
+        app_id: AppId,
+        item: GalleryItem,
+        opacity_ui: int,
+        *,
+        client: NuanxinGalleryClient | None = None,
+    ) -> WallpaperState:
+        """Download full image then apply to the target app."""
+        owns = client is None
+        gallery = client or NuanxinGalleryClient()
+        try:
+            local = await gallery.download_full(item, self.gallery_download_dir())
+        except Exception as exc:
+            if owns:
+                await gallery.aclose()
+            adapter = self._adapters.get(app_id)
+            return WallpaperState(
+                app_id,
+                None,
+                opacity_ui,
+                self._detect(adapter) if adapter else False,
+                f"下载失败：{exc}",
+            )
+        if owns:
+            await gallery.aclose()
+        return self.apply(app_id, str(local), opacity_ui)
 
     @staticmethod
     def _detect(adapter: WallpaperAdapter) -> bool:
