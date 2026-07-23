@@ -10,6 +10,22 @@
 
 > Author: [shayuaidoudou](https://github.com/shayuaidoudou) · 个人小站：[鲨鱼爱兜兜的小站](https://blog.shayuaidoudou.store/)
 
+## 下载体验（macOS）
+
+无需装 Python，直接下载 [最新 Release](https://github.com/shayuaidoudou/Wallpaper-Manager/releases/latest) 里的：
+
+**`Wallpaper-Manager-*-macos-arm64.zip`**（Apple Silicon / M 系列）
+
+1. 解压得到 `Wallpaper Manager.app`
+2. 拖到「应用程序」，或直接双击打开  
+3. 若提示「无法验证开发者」：在 App 上 **右键 → 打开**，或在终端执行：
+
+```bash
+xattr -cr "/Applications/Wallpaper Manager.app"
+```
+
+> 当前预编译包仅含 **macOS arm64**。Intel Mac / Windows 请用下方源码方式运行。
+
 ---
 
 ## 它解决什么
@@ -100,6 +116,15 @@ docs/
 
 ```bash
 pytest -v
+```
+
+## 打包（维护者）
+
+在 Apple Silicon Mac 上：
+
+```bash
+chmod +x scripts/pack_macos.sh
+./scripts/pack_macos.sh          # 产出 release/Wallpaper-Manager-<version>-macos-arm64.zip
 ```
 
 ## Contributing

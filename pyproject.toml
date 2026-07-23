@@ -55,5 +55,14 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["wallpaper_manager*"]
 
+[tool.flet]
+org = "store.shayuaidoudou"
+product = "Wallpaper Manager"
+company = "shayuaidoudou"
+copyright = "Copyright (c) 2026 shayuaidoudou"
+
+[tool.flet.app]
+module = "main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

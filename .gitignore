@@ -8,6 +8,8 @@ venv/
 .env.*
 dist/
 build/
+release/
+*.spec
 *.egg-info/
 .eggs/
 .pytest_cache/
