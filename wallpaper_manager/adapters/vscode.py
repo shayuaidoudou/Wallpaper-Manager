@@ -16,10 +16,24 @@ class VsCodeAdapter:
     app_id = AppId.VSCODE
 
     def __init__(self, settings_path: Path | None = None):
-        self.settings_path = settings_path or vscode_settings_path()
+        self._path_override = settings_path
+
+    @property
+    def settings_path(self) -> Path:
+        return self._path_override if self._path_override is not None else vscode_settings_path()
+
+    def set_path_override(self, path: Path | None) -> None:
+        self._path_override = path
+
+    def auto_detected_path(self) -> Path | None:
+        return vscode_settings_path()
+
+    def effective_config_path(self) -> Path | None:
+        return self.settings_path
 
     def detect(self) -> bool:
-        return self.settings_path.is_file() or self.settings_path.parent.is_dir()
+        path = self.settings_path
+        return path.is_file() or path.parent.is_dir()
 
     def read(self) -> tuple[str | None, int]:
         return read_background_cover(self.settings_path)

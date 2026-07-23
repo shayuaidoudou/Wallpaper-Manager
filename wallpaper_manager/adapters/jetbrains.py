@@ -35,11 +35,22 @@ class JetBrainsAdapter:
     ):
         self.app_id = app_id
         self.product_prefix = product_prefix or self._default_prefix(app_id)
-        self.other_xml = (
-            other_xml
-            if other_xml is not None
-            else find_jetbrains_other_xml(self.product_prefix)
-        )
+        self._path_override = other_xml
+
+    @property
+    def other_xml(self) -> Path | None:
+        if self._path_override is not None:
+            return self._path_override
+        return find_jetbrains_other_xml(self.product_prefix)
+
+    def set_path_override(self, path: Path | None) -> None:
+        self._path_override = path
+
+    def auto_detected_path(self) -> Path | None:
+        return find_jetbrains_other_xml(self.product_prefix)
+
+    def effective_config_path(self) -> Path | None:
+        return self.other_xml
 
     @staticmethod
     def _default_prefix(app_id: AppId) -> str:

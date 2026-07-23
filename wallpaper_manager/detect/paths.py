@@ -57,3 +57,36 @@ def find_jetbrains_other_xml(product_prefix: str, home: Path | None = None) -> P
         reverse=True,
     )
     return candidates[0] / "options" / "other.xml"
+
+
+def ghostty_config_candidates(home: Path | None = None) -> list[Path]:
+    """Ghostty search order: macOS app support first, then XDG."""
+    h = _home(home)
+    xdg_root = Path(os.environ.get("XDG_CONFIG_HOME", str(h / ".config")))
+    xdg = xdg_root / "ghostty"
+    if sys.platform == "darwin":
+        support = h / "Library/Application Support/com.mitchellh.ghostty"
+        return [
+            support / "config.ghostty",
+            support / "config",
+            xdg / "config.ghostty",
+            xdg / "config",
+        ]
+    if sys.platform == "win32":
+        appdata = Path(os.environ.get("APPDATA", str(h / "AppData/Roaming")))
+        return [
+            appdata / "ghostty" / "config.ghostty",
+            appdata / "ghostty" / "config",
+            xdg / "config.ghostty",
+            xdg / "config",
+        ]
+    raise RuntimeError(f"Unsupported platform: {sys.platform}")
+
+
+def find_ghostty_config(home: Path | None = None) -> Path:
+    """Return first existing Ghostty config, else the preferred default path."""
+    candidates = ghostty_config_candidates(home)
+    for path in candidates:
+        if path.is_file():
+            return path
+    return candidates[0]

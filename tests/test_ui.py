@@ -9,10 +9,10 @@ from wallpaper_manager.ui.app import (
 from wallpaper_manager.ui.theme import ACCENT, ACCENT_2, BG, MUTED, PANEL, SUCCESS, TEXT
 
 
-def test_midnight_glass_theme_constants():
+def test_violet_noir_theme_constants():
     assert (BG, PANEL, ACCENT, ACCENT_2, TEXT, MUTED) == (
-        "#0a0612",
-        "#14101f",
+        "#07040f",
+        "#12101c",
         "#c084fc",
         "#f0abfc",
         "#faf5ff",
@@ -34,7 +34,9 @@ def test_apply_requires_installed_app_and_valid_image():
 def test_success_message_has_target_specific_reload_hint():
     assert "Reload Window" in apply_success_message(AppId.VSCODE)
     assert "重新启动 IDE" in apply_success_message(AppId.IDEA)
+    assert "Ghostty" in apply_success_message(AppId.GHOSTTY)
     assert APP_NAMES[AppId.PYCHARM] == "PyCharm"
+    assert APP_NAMES[AppId.GHOSTTY] == "Ghostty"
 
 
 def test_normalize_image_path_returns_resolved_absolute_path(tmp_path, monkeypatch):

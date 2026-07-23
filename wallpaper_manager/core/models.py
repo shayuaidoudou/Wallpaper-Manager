@@ -9,6 +9,7 @@ class AppId(str, Enum):
     CURSOR = "cursor"
     IDEA = "idea"
     PYCHARM = "pycharm"
+    GHOSTTY = "ghostty"
 
 
 @dataclass

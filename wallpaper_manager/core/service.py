@@ -1,14 +1,36 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+
 from wallpaper_manager.adapters.base import WallpaperAdapter
 from wallpaper_manager.adapters.cursor import CursorAdapter
+from wallpaper_manager.adapters.ghostty import GhosttyAdapter
 from wallpaper_manager.adapters.jetbrains import IdeaAdapter, PyCharmAdapter
 from wallpaper_manager.adapters.vscode import VsCodeAdapter
 from wallpaper_manager.core.image_service import validate_image_path
 from wallpaper_manager.core.models import AppId, WallpaperState
+from wallpaper_manager.core.path_config import (
+    CONFIG_FILE_LABELS,
+    CONFIG_PATH_HINTS,
+    auto_config_path,
+    normalize_config_path,
+)
 from wallpaper_manager.core.state_store import StateStore
 
 DEFAULT_OPACITY_UI = 20
+
+
+@dataclass
+class AppPathInfo:
+    app_id: AppId
+    label: str
+    hint: str
+    auto_path: str | None
+    override_path: str | None
+    effective_path: str | None
+    exists: bool
+    using_override: bool
 
 
 class WallpaperService:
@@ -20,6 +42,7 @@ class WallpaperService:
         self.adapters = adapters
         self.store = store or StateStore()
         self._adapters = {adapter.app_id: adapter for adapter in adapters}
+        self.apply_stored_path_overrides()
 
     def bootstrap(self) -> dict[AppId, WallpaperState]:
         stored = self.store.load()
@@ -120,6 +143,48 @@ class WallpaperService:
             return None
         return f"请为 {app_id.value} 安装 Background Cover 扩展"
 
+    def apply_stored_path_overrides(self) -> None:
+        overrides = self.store.load_path_overrides()
+        for app_id, adapter in self._adapters.items():
+            setter = getattr(adapter, "set_path_override", None)
+            if not callable(setter):
+                continue
+            raw = overrides.get(app_id)
+            setter(Path(raw).expanduser() if raw else None)
+
+    def path_info(self, app_id: AppId) -> AppPathInfo:
+        adapter = self._adapters[app_id]
+        overrides = self.store.load_path_overrides()
+        override = overrides.get(app_id)
+        auto = getattr(adapter, "auto_detected_path", lambda: auto_config_path(app_id))()
+        effective = getattr(adapter, "effective_config_path", lambda: auto)()
+        auto_str = str(auto) if auto is not None else None
+        effective_str = str(effective) if effective is not None else None
+        exists = bool(effective and Path(effective).expanduser().exists())
+        return AppPathInfo(
+            app_id=app_id,
+            label=CONFIG_FILE_LABELS[app_id],
+            hint=CONFIG_PATH_HINTS[app_id],
+            auto_path=auto_str,
+            override_path=override,
+            effective_path=effective_str,
+            exists=exists,
+            using_override=bool(override),
+        )
+
+    def set_path_override(self, app_id: AppId, config_path: str | None) -> AppPathInfo:
+        adapter = self._adapters.get(app_id)
+        if adapter is None:
+            raise KeyError(app_id)
+        cleaned: str | None = None
+        if config_path and config_path.strip():
+            cleaned = normalize_config_path(config_path)
+        self.store.save_path_override(app_id, cleaned)
+        setter = getattr(adapter, "set_path_override", None)
+        if callable(setter):
+            setter(Path(cleaned) if cleaned else None)
+        return self.path_info(app_id)
+
     @staticmethod
     def _detect(adapter: WallpaperAdapter) -> bool:
         try:
@@ -130,5 +195,11 @@ class WallpaperService:
 
 def build_default_service() -> WallpaperService:
     return WallpaperService(
-        [VsCodeAdapter(), CursorAdapter(), IdeaAdapter(), PyCharmAdapter()]
+        [
+            VsCodeAdapter(),
+            CursorAdapter(),
+            IdeaAdapter(),
+            PyCharmAdapter(),
+            GhosttyAdapter(),
+        ]
     )

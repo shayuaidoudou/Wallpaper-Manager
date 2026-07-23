@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image
 
 from wallpaper_manager.adapters.cursor import CursorAdapter
+from wallpaper_manager.adapters.ghostty import GhosttyAdapter
 from wallpaper_manager.adapters.jetbrains import JetBrainsAdapter
 from wallpaper_manager.adapters.vscode import VsCodeAdapter
 from wallpaper_manager.core.models import AppId
@@ -181,5 +182,6 @@ def test_build_default_service_wires_all_real_adapters():
         CursorAdapter,
         JetBrainsAdapter,
         JetBrainsAdapter,
+        GhosttyAdapter,
     ]
     assert [adapter.app_id for adapter in service.adapters] == list(AppId)
