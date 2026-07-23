@@ -31,3 +31,17 @@ def test_find_jetbrains_prefers_newest(tmp_path: Path, monkeypatch):
     (newer / "other.xml").write_text("<app/>", encoding="utf-8")
     found = find_jetbrains_other_xml("IntelliJIdea", tmp_path)
     assert found == newer / "other.xml"
+
+
+def test_find_jetbrains_returns_prospective_path_when_other_xml_missing(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr("wallpaper_manager.detect.paths.sys.platform", "darwin")
+    root = tmp_path / "Library/Application Support/JetBrains"
+    (root / "IntelliJIdea2025.9").mkdir(parents=True)
+    newest = root / "IntelliJIdea2025.10"
+    newest.mkdir()
+
+    found = find_jetbrains_other_xml("IntelliJIdea", tmp_path)
+
+    assert found == newest / "options/other.xml"

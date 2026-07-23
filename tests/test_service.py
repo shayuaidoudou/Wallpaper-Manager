@@ -118,6 +118,20 @@ def test_bootstrap_adapter_state_wins_over_store(tmp_path: Path):
     assert state.opacity_ui == 60
 
 
+def test_bootstrap_uses_store_when_installed_adapter_has_no_wallpaper(
+    tmp_path: Path,
+):
+    store = StateStore(tmp_path / "config.json")
+    store.save_app(AppId.VSCODE, "/stored/wallpaper.png", 35)
+    service = WallpaperService([FakeAdapter(AppId.VSCODE)], store=store)
+
+    state = service.bootstrap()[AppId.VSCODE]
+
+    assert state.installed is True
+    assert state.image_path == "/stored/wallpaper.png"
+    assert state.opacity_ui == 35
+
+
 def test_apply_failure_returns_error_without_saving(tmp_path: Path):
     fake = FakeAdapter(AppId.VSCODE)
     fake.fail_apply = RuntimeError("adapter unavailable")

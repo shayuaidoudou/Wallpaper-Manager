@@ -50,7 +50,12 @@ class JetBrainsAdapter:
         raise ValueError(f"Unsupported JetBrains app: {app_id}")
 
     def detect(self) -> bool:
-        return self.other_xml is not None and self.other_xml.is_file()
+        if self.other_xml is None:
+            return False
+        return self.other_xml.is_file() or (
+            self.other_xml.parent.name == "options"
+            and self.other_xml.parent.parent.is_dir()
+        )
 
     def read(self) -> tuple[str | None, int]:
         data = self._read_data()

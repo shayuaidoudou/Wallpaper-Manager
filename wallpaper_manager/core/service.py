@@ -27,11 +27,16 @@ class WallpaperService:
 
         for app_id, adapter in self._adapters.items():
             try:
+                entry = stored.get(app_id, {})
                 installed = adapter.detect()
                 if installed:
                     image_path, opacity_ui = adapter.read()
+                    if image_path is None and entry.get("image_path") is not None:
+                        image_path = entry["image_path"]
+                        stored_opacity = entry.get("opacity_ui")
+                        if stored_opacity is not None:
+                            opacity_ui = stored_opacity
                 else:
-                    entry = stored.get(app_id, {})
                     image_path = entry.get("image_path")
                     opacity_ui = entry.get("opacity_ui")
                     if opacity_ui is None:

@@ -21,6 +21,34 @@ def test_write_preserves_other_keys(tmp_path: Path):
     assert data["backgroundCover.opacity"] == 0.2
 
 
+def test_commented_jsonc_reads_writes_and_preserves_other_keys(tmp_path: Path):
+    settings = tmp_path / "settings.json"
+    settings.write_text(
+        """{
+    // Keep editor preferences.
+    "editor.fontFamily": "https://example.test//font",
+    /* Existing wallpaper settings. */
+    "backgroundCover.imagePath": "/old.png",
+    "backgroundCover.opacity": 0.6,
+}
+""",
+        encoding="utf-8",
+    )
+
+    assert read_background_cover(settings) == ("/old.png", 75)
+
+    write_background_cover(settings, "/new.png", 25)
+
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    assert data["editor.fontFamily"] == "https://example.test//font"
+    assert data["backgroundCover.imagePath"] == "/new.png"
+    assert data["backgroundCover.opacity"] == 0.2
+
+    clear_background_cover(settings)
+    cleared = json.loads(settings.read_text(encoding="utf-8"))
+    assert cleared == {"editor.fontFamily": "https://example.test//font"}
+
+
 def test_read_and_clear(tmp_path: Path):
     settings = tmp_path / "settings.json"
     write_background_cover(settings, "/tmp/w.png", 50)

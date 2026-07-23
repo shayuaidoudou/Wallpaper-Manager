@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -46,10 +47,13 @@ def find_jetbrains_other_xml(product_prefix: str, home: Path | None = None) -> P
     candidates: list[Path] = []
     for child in root.iterdir():
         if child.is_dir() and child.name.startswith(product_prefix):
-            other = child / "options" / "other.xml"
-            if other.is_file():
-                candidates.append(other)
+            candidates.append(child)
     if not candidates:
         return None
-    candidates.sort(key=lambda p: p.parent.parent.name, reverse=True)
-    return candidates[0]
+    candidates.sort(
+        key=lambda path: tuple(
+            int(part) for part in re.findall(r"\d+", path.name[len(product_prefix) :])
+        ),
+        reverse=True,
+    )
+    return candidates[0] / "options" / "other.xml"

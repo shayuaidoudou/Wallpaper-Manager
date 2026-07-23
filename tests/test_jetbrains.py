@@ -75,6 +75,36 @@ def test_apply_read_and_clear_preserve_json_and_xml_components(tmp_path: Path):
     assert cleared["keyToString"]["unrelated"] == "preserve me"
 
 
+def test_detect_and_apply_when_product_exists_without_other_xml(tmp_path: Path):
+    product_dir = tmp_path / "IntelliJIdea2025.2"
+    product_dir.mkdir()
+    other_xml = product_dir / "options" / "other.xml"
+    adapter = JetBrainsAdapter(AppId.IDEA, other_xml=other_xml)
+
+    assert adapter.detect() is True
+    assert adapter.read() == (None, 0)
+
+    adapter.apply("/tmp/new.png", 45)
+
+    assert other_xml.is_file()
+    assert adapter.read() == ("/tmp/new.png", 45)
+
+    adapter.clear()
+    assert adapter.read() == (None, 0)
+
+
+def test_clear_creates_minimal_other_xml_for_existing_product(tmp_path: Path):
+    product_dir = tmp_path / "PyCharm2025.2"
+    product_dir.mkdir()
+    other_xml = product_dir / "options" / "other.xml"
+    adapter = JetBrainsAdapter(AppId.PYCHARM, other_xml=other_xml)
+
+    adapter.clear()
+
+    assert other_xml.is_file()
+    assert read_property_service(other_xml) == {}
+
+
 def test_product_factories_use_expected_ids(tmp_path: Path):
     assert IdeaAdapter(other_xml=tmp_path / "idea.xml").app_id is AppId.IDEA
     assert PyCharmAdapter(other_xml=tmp_path / "pycharm.xml").app_id is AppId.PYCHARM
