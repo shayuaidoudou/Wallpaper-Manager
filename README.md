@@ -44,5 +44,5 @@ pytest -v
 Or with the project venv:
 
 ```bash
-.venv/bin/pytest -v
+.venv/bin/pytest -v        # Windows: .venv\Scripts\pytest -v
 ```
