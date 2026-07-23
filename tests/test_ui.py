@@ -11,12 +11,12 @@ from wallpaper_manager.ui.theme import ACCENT, ACCENT_2, BG, MUTED, PANEL, TEXT
 
 def test_midnight_glass_theme_constants():
     assert (BG, PANEL, ACCENT, ACCENT_2, TEXT, MUTED) == (
-        "#07090e",
-        "#101822",
-        "#38bdf8",
-        "#22d3ee",
-        "#f1f5f9",
-        "#8b9bb0",
+        "#09060f",
+        "#161022",
+        "#c084fc",
+        "#e879f9",
+        "#faf5ff",
+        "#b6a4d4",
     )
 
 
