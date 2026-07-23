@@ -317,6 +317,8 @@ class WallpaperManagerUI:
         if result.last_error:
             self._show_snack(f"应用失败：{result.last_error}", ERROR)
             return
+        applied_app = self.active_app
+        applied_app_name = APP_NAMES[applied_app]
         self.apply_button.scale = 0.96
         self.apply_button.content = "已应用"
         self.apply_button.icon = ft.Icons.CHECK_CIRCLE
@@ -324,13 +326,14 @@ class WallpaperManagerUI:
         await asyncio.sleep(0.09)
         self.apply_button.scale = 1
         self.page.update()
-        tip = self.service.extension_tip(self.active_app)
-        message = apply_success_message(self.active_app)
+        tip = self.service.extension_tip(applied_app)
+        message = apply_success_message(applied_app)
         self._show_snack(f"{message} {tip}" if tip else message, SUCCESS)
         await asyncio.sleep(0.45)
-        self.apply_button.content = f"应用到 {APP_NAMES[self.active_app]}"
-        self.apply_button.icon = ft.Icons.CHECK
-        self.page.update()
+        if self.active_app == applied_app:
+            self.apply_button.content = f"应用到 {applied_app_name}"
+            self.apply_button.icon = ft.Icons.CHECK
+            self.page.update()
 
     def _on_clear(self, _event: ft.Event[ft.OutlinedButton]) -> None:
         result = self.service.clear(self.active_app)
