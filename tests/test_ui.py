@@ -4,6 +4,7 @@ from wallpaper_manager.ui.app import (
     Draft,
     apply_success_message,
     can_apply,
+    normalize_image_path,
 )
 from wallpaper_manager.ui.theme import ACCENT, ACCENT_2, BG, MUTED, PANEL, TEXT
 
@@ -33,3 +34,11 @@ def test_success_message_has_target_specific_reload_hint():
     assert "重新加载窗口" in apply_success_message(AppId.VSCODE)
     assert "重新启动 IDE" in apply_success_message(AppId.IDEA)
     assert APP_NAMES[AppId.PYCHARM] == "PyCharm"
+
+
+def test_normalize_image_path_returns_resolved_absolute_path(tmp_path, monkeypatch):
+    image = tmp_path / "wallpaper.png"
+    image.touch()
+    monkeypatch.chdir(tmp_path)
+
+    assert normalize_image_path("./wallpaper.png") == str(image.resolve())

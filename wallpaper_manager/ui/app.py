@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +43,10 @@ def can_apply(draft: Draft) -> bool:
     return bool(
         draft.installed and draft.image_path and draft.validation_error is None
     )
+
+
+def normalize_image_path(image_path: str) -> str:
+    return str(Path(image_path).expanduser().resolve())
 
 
 def apply_success_message(app_id: AppId) -> str:
@@ -114,6 +119,7 @@ class WallpaperManagerUI:
             icon=ft.Icons.CHECK,
             bgcolor=ACCENT,
             color=BG,
+            animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
             on_click=self._on_apply,
         )
         self.file_picker = ft.FilePicker()
@@ -192,7 +198,7 @@ class WallpaperManagerUI:
             style=ft.ButtonStyle(color=ACCENT, side=ft.BorderSide(1, ACCENT)),
             on_click=self._on_browse,
         )
-        panel = ft.Container(
+        self.main_panel = ft.Container(
             content=ft.Column(
                 controls=[
                     preview,
@@ -218,6 +224,8 @@ class WallpaperManagerUI:
             bgcolor=ft.Colors.with_opacity(0.88, PANEL),
             border=ft.Border.all(1, PANEL_BORDER),
             border_radius=20,
+            opacity=1,
+            animate_opacity=ft.Animation(140, ft.AnimationCurve.EASE_OUT),
         )
         root = ft.Container(
             content=ft.Column(
@@ -230,7 +238,7 @@ class WallpaperManagerUI:
                     ),
                     ft.Text(f"检测到 {installed_count} 个软件", size=13, color=MUTED),
                     tabs_control,
-                    panel,
+                    self.main_panel,
                 ],
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
@@ -246,9 +254,13 @@ class WallpaperManagerUI:
         self._load_active_draft()
         return root
 
-    def _on_tab_change(self, event: ft.Event[ft.Tabs]) -> None:
+    async def _on_tab_change(self, event: ft.Event[ft.Tabs]) -> None:
+        self.main_panel.opacity = 0.72
+        self.page.update()
+        await asyncio.sleep(0.07)
         self.active_app = APP_ORDER[event.control.selected_index]
         self._load_active_draft()
+        self.main_panel.opacity = 1
         self.page.update()
 
     def _on_path_change(self, event: ft.Event[ft.TextField]) -> None:
@@ -286,19 +298,39 @@ class WallpaperManagerUI:
         self._refresh_preview()
         self.page.update()
 
-    def _on_apply(self, _event: ft.Event[ft.FilledButton]) -> None:
+    async def _on_apply(self, _event: ft.Event[ft.FilledButton]) -> None:
         draft = self.drafts[self.active_app]
         if not can_apply(draft):
             return
+        valid, error = validate_image_path(draft.image_path or "")
+        if not valid:
+            draft.validation_error = error
+            self._refresh_preview()
+            self.page.update()
+            return
+        absolute_path = normalize_image_path(draft.image_path or "")
+        draft.image_path = absolute_path
+        self.path_field.value = absolute_path
         result = self.service.apply(
-            self.active_app, draft.image_path or "", draft.opacity_ui
+            self.active_app, absolute_path, draft.opacity_ui
         )
         if result.last_error:
             self._show_snack(f"应用失败：{result.last_error}", ERROR)
             return
+        self.apply_button.scale = 0.96
+        self.apply_button.content = "已应用"
+        self.apply_button.icon = ft.Icons.CHECK_CIRCLE
+        self.page.update()
+        await asyncio.sleep(0.09)
+        self.apply_button.scale = 1
+        self.page.update()
         tip = self.service.extension_tip(self.active_app)
         message = apply_success_message(self.active_app)
         self._show_snack(f"{message} {tip}" if tip else message, SUCCESS)
+        await asyncio.sleep(0.45)
+        self.apply_button.content = f"应用到 {APP_NAMES[self.active_app]}"
+        self.apply_button.icon = ft.Icons.CHECK
+        self.page.update()
 
     def _on_clear(self, _event: ft.Event[ft.OutlinedButton]) -> None:
         result = self.service.clear(self.active_app)
@@ -320,7 +352,7 @@ class WallpaperManagerUI:
         draft = self.drafts[self.active_app]
         has_valid_image = bool(draft.image_path and not draft.validation_error)
         self.preview_image.src = (
-            str(Path(draft.image_path).expanduser().resolve())
+            normalize_image_path(draft.image_path)
             if has_valid_image and draft.image_path
             else ""
         )
