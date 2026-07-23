@@ -15,18 +15,20 @@ from wallpaper_manager.ui.theme import (
     ACCENT_DIM,
     BG,
     ERROR,
+    HAIRLINE,
     MUTED,
+    PANEL,
     PANEL_BORDER,
     PANEL_BORDER_LIT,
     PANEL_ELEVATED,
     SUCCESS,
     TEXT,
     accent_gradient,
-    ambient_orb,
-    glass_shadow,
+    elev_shadow,
+    glow_shadow,
     page_gradient,
-    selected_shadow,
-    soft_shadow,
+    panel_gradient,
+    soft_orb,
 )
 
 APP_NAMES = {
@@ -76,86 +78,75 @@ class WallpaperManagerUI:
         }
         self.active_app = APP_ORDER[0]
         self._tab_buttons: dict[AppId, ft.Container] = {}
+        self._motion_running = False
 
         self.preview_image = ft.Image(
             src="",
             fit=ft.BoxFit.COVER,
             expand=True,
             visible=False,
-            fade_in_animation=280,
+            fade_in_animation=360,
             opacity=1,
-            animate_opacity=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
+            animate_opacity=ft.Animation(240, ft.AnimationCurve.EASE_OUT),
         )
-        self.preview_overlay = ft.Container(
+        self.preview_veil = ft.Container(
             expand=True,
             gradient=ft.LinearGradient(
                 begin=ft.Alignment.TOP_CENTER,
                 end=ft.Alignment.BOTTOM_CENTER,
-                colors=["#c084fc00", "#7c3aed33", "#09060f99"],
+                colors=["#0a061200", "#0a061266", "#0a0612cc"],
             ),
             ignore_interactions=True,
         )
         self.preview_message = ft.Text(
-            "紫霓幻境 · 选择本地壁纸开始预览",
+            "选择一张图片，预览会在这里展开",
             color=MUTED,
             size=14,
             text_align=ft.TextAlign.CENTER,
         )
         self.preview_badge = ft.Container(
-            content=ft.Text("PREVIEW", size=11, weight=ft.FontWeight.W_700, color=TEXT),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+            content=ft.Text("预览", size=11, weight=ft.FontWeight.W_600, color=TEXT),
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
             border_radius=999,
-            bgcolor="#1a0b2ecc",
-            border=ft.Border.all(1, ACCENT),
-            right=16,
-            top=16,
-            animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(900, ft.AnimationCurve.EASE_IN_OUT),
-            scale=1.0,
+            bgcolor="#1a1328cc",
+            border=ft.Border.all(1, HAIRLINE),
+            right=14,
+            top=14,
         )
         self.opacity_chip = ft.Container(
-            content=ft.Text("25%", size=12, weight=ft.FontWeight.W_700, color=ACCENT_2),
-            padding=ft.Padding.symmetric(horizontal=12, vertical=7),
+            content=ft.Text("应用 25%", size=11, weight=ft.FontWeight.W_700, color=ACCENT_2),
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
             border_radius=999,
-            bgcolor="#14081fcc",
+            bgcolor="#1a1328cc",
             border=ft.Border.all(1, ACCENT_DIM),
-            left=16,
-            bottom=16,
-            shadow=soft_shadow(),
-            animate_scale=ft.Animation(160, ft.AnimationCurve.EASE_OUT),
+            left=14,
+            bottom=14,
+            animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
         )
-        self.shimmer = ft.Container(
-            width=70,
-            height=420,
-            left=-140,
-            top=-20,
-            gradient=ft.LinearGradient(
-                begin=ft.Alignment.CENTER_LEFT,
-                end=ft.Alignment.CENTER_RIGHT,
-                colors=["#e879f900", "#f5d0fe55", "#e879f900"],
-            ),
-            rotate=ft.Rotate(angle=-0.28, alignment=ft.Alignment.CENTER),
-            animate_position=ft.Animation(900, ft.AnimationCurve.EASE_IN_OUT),
+        self.ring_glow = ft.Container(
+            expand=True,
+            border_radius=22,
+            border=ft.Border.all(1.5, "#a855f700"),
+            animate=ft.Animation(420, ft.AnimationCurve.EASE_OUT),
             ignore_interactions=True,
-            opacity=0,  # only visible during sweep — avoids stuck yellow bar
         )
         self.path_field = ft.TextField(
             label="图片路径",
-            hint_text="选择或粘贴本地图片绝对路径",
+            hint_text="粘贴路径，或点右侧浏览",
             prefix_icon=ft.Icons.IMAGE_OUTLINED,
             color=TEXT,
             label_style=ft.TextStyle(color=MUTED, size=12),
-            bgcolor="#140a1ecc",
+            bgcolor="#100c1acc",
             border_color=PANEL_BORDER,
             focused_border_color=ACCENT,
             border_radius=14,
             filled=True,
+            cursor_color=ACCENT,
             on_change=self._on_path_change,
             on_submit=self._on_path_change,
             expand=True,
-            cursor_color=ACCENT,
         )
-        self.opacity_label = ft.Text("", color=ACCENT_2, weight=ft.FontWeight.W_700, size=15)
+        self.opacity_label = ft.Text("25%", color=ACCENT_2, weight=ft.FontWeight.W_700, size=14)
         self.opacity_slider = ft.Slider(
             min=0,
             max=100,
@@ -167,60 +158,54 @@ class WallpaperManagerUI:
             expand=True,
         )
         self.clear_button = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.DELETE_OUTLINE, size=18, color=MUTED),
-                    ft.Text("清除", color=MUTED, weight=ft.FontWeight.W_600),
-                ],
-                spacing=8,
-                tight=True,
-            ),
-            padding=ft.Padding.symmetric(horizontal=18, vertical=12),
+            content=ft.Text("清除", color=MUTED, weight=ft.FontWeight.W_600),
+            padding=ft.Padding.symmetric(horizontal=20, vertical=13),
             border_radius=14,
             border=ft.Border.all(1, PANEL_BORDER),
-            bgcolor="#1a0f2888",
+            bgcolor="#120e1c",
             on_click=self._on_clear,
-            animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+            animate_opacity=ft.Animation(160, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT),
             ink=False,
         )
         self.apply_button = ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.AUTO_AWESOME, size=18, color=BG),
-                    ft.Text("应用到", color=BG, weight=ft.FontWeight.W_700),
+                    ft.Icon(ft.Icons.AUTO_AWESOME, size=17, color=BG),
+                    ft.Text("应用到", color=BG, weight=ft.FontWeight.W_700, size=14),
                 ],
                 spacing=8,
                 tight=True,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
             padding=ft.Padding.symmetric(horizontal=22, vertical=13),
-            border_radius=16,
+            border_radius=14,
             gradient=accent_gradient(),
-            shadow=soft_shadow(),
+            shadow=glow_shadow(),
             on_click=self._on_apply,
-            animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT_BACK),
+            animate_scale=ft.Animation(160, ft.AnimationCurve.EASE_OUT),
+            animate_opacity=ft.Animation(160, ft.AnimationCurve.EASE_OUT),
             ink=False,
         )
-        self.apply_label = self.apply_button.content.controls[1]  # type: ignore[attr-defined]
-        self.apply_icon = self.apply_button.content.controls[0]  # type: ignore[attr-defined]
-        self.status_text = ft.Text("", size=12, color=MUTED)
-        self.title_glow = ft.Text(
-            "Manager",
-            size=44,
-            weight=ft.FontWeight.W_800,
-            color=TEXT,
-            style=ft.TextStyle(letter_spacing=-1.2, height=1),
-            animate_opacity=ft.Animation(1200, ft.AnimationCurve.EASE_IN_OUT),
+        self.apply_label = self.apply_button.content.controls[1]  # type: ignore[index]
+        self.apply_icon = self.apply_button.content.controls[0]  # type: ignore[index]
+        self.status_dot = ft.Container(
+            width=8,
+            height=8,
+            border_radius=8,
+            bgcolor=ACCENT_2,
+            animate_opacity=ft.Animation(1400, ft.AnimationCurve.EASE_IN_OUT),
             opacity=1,
         )
-        self.file_picker = ft.FilePicker()
-        self.page.services.append(self.file_picker)
+        self.status_text = ft.Text("", size=12, color=TEXT, weight=ft.FontWeight.W_600)
+        self.header_block: ft.Container
+        self.tabs_block: ft.Container
         self.main_panel: ft.Container
         self.root_shell: ft.Container
         self.orb_a: ft.Container
         self.orb_b: ft.Container
-        self.orb_c: ft.Container
-        self._motion_running = False
+        self.file_picker = ft.FilePicker()
+        self.page.services.append(self.file_picker)
 
     @staticmethod
     def _draft_from_state(state: object) -> Draft:
@@ -239,46 +224,41 @@ class WallpaperManagerUI:
 
     def _make_tab(self, app_id: AppId) -> ft.Container:
         draft = self.drafts[app_id]
-        label = APP_NAMES[app_id] if draft.installed else f"{APP_NAMES[app_id]}"
-        subtitle = "ONLINE" if draft.installed else "OFFLINE"
         selected = app_id == self.active_app
-
+        status = "已连接" if draft.installed else "未安装"
         body = ft.Column(
             [
                 ft.Text(
-                    label,
+                    APP_NAMES[app_id],
                     size=13,
                     weight=ft.FontWeight.W_700,
                     color=TEXT if selected else MUTED,
                 ),
                 ft.Text(
-                    subtitle,
+                    status,
                     size=10,
                     weight=ft.FontWeight.W_600,
                     color=ACCENT_2 if draft.installed else ERROR,
                 ),
             ],
-            spacing=2,
+            spacing=3,
             tight=True,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         )
         tab = ft.Container(
             content=body,
-            padding=ft.Padding.symmetric(horizontal=18, vertical=12),
-            border_radius=16,
+            padding=ft.Padding.symmetric(horizontal=14, vertical=11),
+            border_radius=14,
             expand=True,
             alignment=ft.Alignment.CENTER,
-            bgcolor=ft.Colors.with_opacity(0.28, ACCENT) if selected else "#140a1e99",
-            border=ft.Border.all(
-                1.5 if selected else 1, ACCENT_2 if selected else PANEL_BORDER
-            ),
-            shadow=selected_shadow() if selected else None,
-            animate=ft.Animation(220, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(220, ft.AnimationCurve.EASE_OUT_BACK),
+            bgcolor="#c084fc33" if selected else "#00000000",
+            border=ft.Border.all(1, ACCENT if selected else "#00000000"),
+            shadow=glow_shadow() if selected else None,
+            animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
             scale=1.0,
             on_click=self._tab_click_handler(app_id),
             ink=False,
-            data=app_id,
         )
         self._tab_buttons[app_id] = tab
         return tab
@@ -293,14 +273,10 @@ class WallpaperManagerUI:
         for app_id, tab in self._tab_buttons.items():
             draft = self.drafts[app_id]
             selected = app_id == self.active_app
-            tab.bgcolor = (
-                ft.Colors.with_opacity(0.28, ACCENT) if selected else "#140a1e99"
-            )
-            tab.border = ft.Border.all(
-                1.5 if selected else 1, ACCENT_2 if selected else PANEL_BORDER
-            )
-            tab.shadow = selected_shadow() if selected else None
-            tab.scale = 1.04 if selected else 1.0
+            tab.bgcolor = "#c084fc33" if selected else "#00000000"
+            tab.border = ft.Border.all(1, ACCENT if selected else "#00000000")
+            tab.shadow = glow_shadow() if selected else None
+            tab.scale = 1.02 if selected else 1.0
             col = tab.content
             assert isinstance(col, ft.Column)
             title, status = col.controls
@@ -308,99 +284,102 @@ class WallpaperManagerUI:
             assert isinstance(status, ft.Text)
             title.color = TEXT if selected else MUTED
             title.value = APP_NAMES[app_id]
-            status.value = "ONLINE" if draft.installed else "OFFLINE"
+            status.value = "已连接" if draft.installed else "未安装"
             status.color = ACCENT_2 if draft.installed else ERROR
 
     async def _select_tab(self, app_id: AppId) -> None:
         if app_id == self.active_app:
             return
-        self.main_panel.opacity = 0.0
-        self.main_panel.offset = ft.Offset(0.02, 0.04)
-        self.main_panel.scale = 0.985
+        self.main_panel.opacity = 0
+        self.main_panel.offset = ft.Offset(0, 0.025)
         self.page.update()
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.12)
         self.active_app = app_id
         self._refresh_tabs()
         self._load_active_draft()
         self.main_panel.opacity = 1
         self.main_panel.offset = ft.Offset(0, 0)
-        self.main_panel.scale = 1
         self.page.update()
-        await self._run_shimmer()
 
     def build(self) -> ft.Control:
-        installed_count = sum(draft.installed for draft in self.drafts.values())
-        self.status_text.value = f"{installed_count} / {len(APP_ORDER)} editors linked"
+        installed_count = sum(d.installed for d in self.drafts.values())
+        self.status_text.value = f"{installed_count}/{len(APP_ORDER)} 已连接"
 
-        header = ft.Row(
-            [
-                ft.Column(
-                    [
-                        ft.Text(
-                            "VIOLET LUXE",
-                            size=12,
-                            weight=ft.FontWeight.W_700,
-                            color=ACCENT_2,
-                            style=ft.TextStyle(letter_spacing=5),
-                        ),
-                        self.title_glow,
-                        ft.Text(
-                            "华丽紫霓 · 动效氛围壁纸中枢",
-                            size=13,
-                            color=MUTED,
-                        ),
-                    ],
-                    spacing=4,
-                    tight=True,
-                ),
-                ft.Container(expand=True),
-                ft.Container(
-                    content=ft.Column(
+        self.header_block = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Column(
                         [
-                            ft.Text("STATUS", size=10, weight=ft.FontWeight.W_700, color=MUTED),
-                            self.status_text,
+                            ft.Text(
+                                "VIOLET NOIR",
+                                size=11,
+                                weight=ft.FontWeight.W_700,
+                                color=ACCENT_2,
+                                style=ft.TextStyle(letter_spacing=3.5),
+                            ),
+                            ft.Text(
+                                "Wallpaper Manager",
+                                size=34,
+                                weight=ft.FontWeight.W_800,
+                                color=TEXT,
+                                style=ft.TextStyle(letter_spacing=-0.8, height=1.05),
+                            ),
+                            ft.Text(
+                                "为每个 IDE 单独设定氛围壁纸",
+                                size=13,
+                                color=MUTED,
+                            ),
                         ],
-                        spacing=4,
+                        spacing=6,
                         tight=True,
-                        horizontal_alignment=ft.CrossAxisAlignment.END,
                     ),
-                    padding=ft.Padding.symmetric(horizontal=16, vertical=12),
-                    border_radius=16,
-                    bgcolor="#1a0b2ecc",
-                    border=ft.Border.all(1, ACCENT_DIM),
-                    shadow=soft_shadow(),
-                    animate_opacity=ft.Animation(900, ft.AnimationCurve.EASE_IN_OUT),
-                ),
-            ],
-            vertical_alignment=ft.CrossAxisAlignment.END,
+                    ft.Container(expand=True),
+                    ft.Container(
+                        content=ft.Row(
+                            [self.status_dot, self.status_text],
+                            spacing=8,
+                            tight=True,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+                        border_radius=999,
+                        bgcolor="#1a1328",
+                        border=ft.Border.all(1, PANEL_BORDER_LIT),
+                    ),
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            opacity=0,
+            offset=ft.Offset(0, 0.04),
+            animate_opacity=ft.Animation(420, ft.AnimationCurve.EASE_OUT),
+            animate_offset=ft.Animation(420, ft.AnimationCurve.EASE_OUT),
         )
 
-        tabs_row = ft.Container(
+        self.tabs_block = ft.Container(
             content=ft.Row(
                 [self._make_tab(app_id) for app_id in APP_ORDER],
-                spacing=10,
+                spacing=6,
             ),
-            padding=8,
-            border_radius=22,
-            bgcolor="#12081ccc",
+            padding=6,
+            border_radius=18,
+            bgcolor="#0f0b18",
             border=ft.Border.all(1, PANEL_BORDER),
-            shadow=soft_shadow(),
+            opacity=0,
+            offset=ft.Offset(0, 0.04),
+            animate_opacity=ft.Animation(420, ft.AnimationCurve.EASE_OUT),
+            animate_offset=ft.Animation(420, ft.AnimationCurve.EASE_OUT),
         )
 
         preview = ft.Container(
             content=ft.Stack(
-                controls=[
+                [
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Icon(
-                                    ft.Icons.AUTO_AWESOME,
-                                    size=46,
-                                    color=ACCENT,
-                                ),
+                                ft.Icon(ft.Icons.WALLPAPER_OUTLINED, size=40, color=PANEL_BORDER_LIT),
                                 self.preview_message,
                             ],
-                            spacing=12,
+                            spacing=10,
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                         alignment=ft.Alignment.CENTER,
@@ -408,159 +387,125 @@ class WallpaperManagerUI:
                         gradient=ft.LinearGradient(
                             begin=ft.Alignment.TOP_LEFT,
                             end=ft.Alignment.BOTTOM_RIGHT,
-                            colors=["#221038", "#0d0716"],
+                            colors=["#1b1430", "#0d0a16"],
                         ),
                     ),
                     self.preview_image,
-                    self.preview_overlay,
-                    self.shimmer,
+                    self.preview_veil,
                     self.preview_badge,
                     self.opacity_chip,
+                    self.ring_glow,
                 ],
                 fit=ft.StackFit.EXPAND,
             ),
-            height=260,
-            border_radius=24,
+            height=268,
+            border_radius=22,
             clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-            border=ft.Border.all(1.5, ACCENT_DIM),
-            shadow=glass_shadow(),
+            border=ft.Border.all(1, PANEL_BORDER_LIT),
+            shadow=elev_shadow(),
         )
 
         browse_button = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.FOLDER_OPEN_ROUNDED, size=18, color=ACCENT_2),
-                    ft.Text("浏览", color=ACCENT_2, weight=ft.FontWeight.W_700),
-                ],
-                spacing=8,
-                tight=True,
-            ),
-            padding=ft.Padding.symmetric(horizontal=16, vertical=14),
+            content=ft.Text("浏览", color=ACCENT_2, weight=ft.FontWeight.W_700),
+            padding=ft.Padding.symmetric(horizontal=18, vertical=14),
             border_radius=14,
             border=ft.Border.all(1, ACCENT),
-            bgcolor="#a855f722",
+            bgcolor="#a855f718",
             on_click=self._on_browse,
-            animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT_BACK),
+            animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT),
             ink=False,
         )
 
         controls = ft.Column(
             [
-                ft.Text("IMAGE SOURCE", size=11, weight=ft.FontWeight.W_700, color=MUTED),
-                ft.Row([self.path_field, browse_button], spacing=12),
-                ft.Container(height=6),
+                ft.Text("图片来源", size=12, weight=ft.FontWeight.W_600, color=MUTED),
+                ft.Row([self.path_field, browse_button], spacing=10),
+                ft.Container(height=4),
                 ft.Row(
                     [
-                        ft.Text(
-                            "OPACITY",
-                            size=11,
-                            weight=ft.FontWeight.W_700,
-                            color=MUTED,
-                        ),
+                        ft.Text("透明度", size=12, weight=ft.FontWeight.W_600, color=MUTED),
                         ft.Container(expand=True),
                         self.opacity_label,
                     ]
                 ),
                 self.opacity_slider,
                 ft.Text(
-                    "0% = 图片完全透明（显示主题底色，不是强制纯黑）",
+                    "0% 表示图片完全透明，编辑器显示主题底色",
+                    size=11,
                     color=MUTED,
-                    size=12,
                 ),
-                ft.Container(height=4),
+                ft.Container(height=2),
                 ft.Row(
                     [self.clear_button, ft.Container(expand=True), self.apply_button],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             ],
-            spacing=10,
+            spacing=8,
         )
 
         self.main_panel = ft.Container(
-            content=ft.Column([preview, controls], spacing=20),
-            padding=22,
-            border_radius=28,
-            bgcolor="#161022f2",
-            border=ft.Border.all(1.5, PANEL_BORDER_LIT),
-            shadow=glass_shadow(),
-            opacity=1,
-            offset=ft.Offset(0, 0),
-            scale=1,
-            animate_opacity=ft.Animation(220, ft.AnimationCurve.EASE_OUT),
-            animate_offset=ft.Animation(220, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(220, ft.AnimationCurve.EASE_OUT),
+            content=ft.Column([preview, controls], spacing=18),
+            padding=20,
+            border_radius=24,
+            gradient=panel_gradient(),
+            border=ft.Border.all(1, HAIRLINE),
+            shadow=elev_shadow(),
+            opacity=0,
+            offset=ft.Offset(0, 0.05),
+            animate_opacity=ft.Animation(460, ft.AnimationCurve.EASE_OUT),
+            animate_offset=ft.Animation(460, ft.AnimationCurve.EASE_OUT),
         )
 
         content = ft.Container(
             content=ft.Column(
-                [header, tabs_row, self.main_panel],
-                spacing=18,
+                [self.header_block, self.tabs_block, self.main_panel],
+                spacing=16,
                 scroll=ft.ScrollMode.AUTO,
             ),
-            padding=ft.Padding.symmetric(horizontal=36, vertical=28),
+            padding=ft.Padding.symmetric(horizontal=34, vertical=26),
             expand=True,
         )
 
-        self.orb_a = ambient_orb(size=280, color="#a855f733", top=-90, right=-40, opacity=0.5)
-        self.orb_b = ambient_orb(size=240, color="#e879f922", bottom=-80, left=-50, opacity=0.45)
-        self.orb_c = ambient_orb(size=160, color="#c084fc28", top=220, left=520, opacity=0.4)
+        self.orb_a = soft_orb(340, "#a855f728", top=-120, right=-80)
+        self.orb_b = soft_orb(280, "#e879f918", bottom=-120, left=-90)
 
         self.root_shell = ft.Container(
             expand=True,
             gradient=page_gradient(),
-            content=ft.Stack(
-                [
-                    self.orb_a,
-                    self.orb_b,
-                    self.orb_c,
-                    content,
-                ],
-                expand=True,
-            ),
-            opacity=0,
-            animate_opacity=ft.Animation(520, ft.AnimationCurve.EASE_OUT),
+            content=ft.Stack([self.orb_a, self.orb_b, content], expand=True),
         )
         self._load_active_draft()
         self._refresh_tabs()
         return self.root_shell
 
-    async def _run_shimmer(self) -> None:
-        self.shimmer.left = -140
-        self.shimmer.opacity = 0.7
-        self.page.update()
-        await asyncio.sleep(0.03)
-        self.shimmer.left = 980
-        self.page.update()
-        await asyncio.sleep(0.95)
-        self.shimmer.opacity = 0
-        self.shimmer.left = -140
-        self.page.update()
-
     async def _play_entrance(self) -> None:
-        await asyncio.sleep(0.04)
-        self.root_shell.opacity = 1
+        await asyncio.sleep(0.05)
+        self.header_block.opacity = 1
+        self.header_block.offset = ft.Offset(0, 0)
         self.page.update()
-        await self._run_shimmer()
+        await asyncio.sleep(0.08)
+        self.tabs_block.opacity = 1
+        self.tabs_block.offset = ft.Offset(0, 0)
+        self.page.update()
+        await asyncio.sleep(0.08)
+        self.main_panel.opacity = 1
+        self.main_panel.offset = ft.Offset(0, 0)
+        self.page.update()
         if not self._motion_running:
             self._motion_running = True
-            self.page.run_task(self._ambient_motion_loop)
+            self.page.run_task(self._ambient_loop)
 
-    async def _ambient_motion_loop(self) -> None:
-        pulse = True
+    async def _ambient_loop(self) -> None:
+        bright = True
         while self._motion_running:
-            self.orb_a.opacity = 0.62 if pulse else 0.32
-            self.orb_a.scale = 1.06 if pulse else 0.94
-            self.orb_b.opacity = 0.35 if pulse else 0.55
-            self.orb_b.scale = 0.94 if pulse else 1.08
-            self.orb_c.opacity = 0.5 if pulse else 0.28
-            self.orb_c.scale = 1.1 if pulse else 0.9
-            self.title_glow.opacity = 1.0 if pulse else 0.78
-            self.preview_badge.scale = 1.04 if pulse else 0.97
+            self.orb_a.opacity = 0.62 if bright else 0.34
+            self.orb_a.scale = 1.04 if bright else 0.96
+            self.orb_b.opacity = 0.28 if bright else 0.5
+            self.orb_b.scale = 0.96 if bright else 1.05
+            self.status_dot.opacity = 1.0 if bright else 0.35
             self.page.update()
-            pulse = not pulse
-            await asyncio.sleep(2.0)
-            if pulse:
-                await self._run_shimmer()
+            bright = not bright
+            await asyncio.sleep(2.6)
 
     def _on_path_change(self, event: ft.Event[ft.TextField]) -> None:
         path = event.control.value.strip()
@@ -581,7 +526,6 @@ class WallpaperManagerUI:
         self.page.update()
 
     async def _on_browse(self, _event: ft.ControlEvent) -> None:
-        self.browse_button_press()
         files = await self.file_picker.pick_files(
             dialog_title="选择壁纸",
             file_type=ft.FilePickerFileType.CUSTOM,
@@ -598,10 +542,6 @@ class WallpaperManagerUI:
         self._refresh_preview()
         self.page.update()
 
-    def browse_button_press(self) -> None:
-        # no-op hook kept for clarity; scale handled by ink/animate
-        return
-
     async def _on_apply(self, _event: ft.ControlEvent) -> None:
         draft = self.drafts[self.active_app]
         if not can_apply(draft):
@@ -615,34 +555,30 @@ class WallpaperManagerUI:
         absolute_path = normalize_image_path(draft.image_path or "")
         draft.image_path = absolute_path
         self.path_field.value = absolute_path
-        result = self.service.apply(
-            self.active_app, absolute_path, draft.opacity_ui
-        )
+        result = self.service.apply(self.active_app, absolute_path, draft.opacity_ui)
         if result.last_error:
             self._show_snack(f"应用失败：{result.last_error}", ERROR)
             return
+
         applied_app = self.active_app
-        applied_app_name = APP_NAMES[applied_app]
-        self.apply_button.scale = 0.9
+        applied_name = APP_NAMES[applied_app]
+        self.apply_button.scale = 0.96
+        self.ring_glow.border = ft.Border.all(1.5, ACCENT_2)
         self.apply_label.value = "已应用"
-        self.apply_icon.name = ft.Icons.CHECK_CIRCLE_ROUNDED
-        self.opacity_chip.scale = 1.12
+        self.apply_icon.name = ft.Icons.CHECK_ROUNDED
         self.page.update()
-        await asyncio.sleep(0.12)
-        self.apply_button.scale = 1.06
-        self.page.update()
-        await asyncio.sleep(0.08)
+        await asyncio.sleep(0.14)
         self.apply_button.scale = 1.0
-        self.opacity_chip.scale = 1.0
         self.page.update()
         tip = self.service.extension_tip(applied_app)
         message = apply_success_message(applied_app)
         self._show_snack(f"{message} {tip}" if tip else message, SUCCESS)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.55)
+        self.ring_glow.border = ft.Border.all(1.5, "#a855f700")
         if self.active_app == applied_app:
-            self.apply_label.value = f"应用到 {applied_app_name}"
+            self.apply_label.value = f"应用到 {applied_name}"
             self.apply_icon.name = ft.Icons.AUTO_AWESOME
-            self.page.update()
+        self.page.update()
 
     def _on_clear(self, _event: ft.ControlEvent) -> None:
         result = self.service.clear(self.active_app)
@@ -670,27 +606,25 @@ class WallpaperManagerUI:
             else ""
         )
         self.preview_image.visible = has_valid_image
-        # Keep preview readable even when apply opacity is 0%.
         self.preview_image.opacity = (
-            max(0.22, draft.opacity_ui / 100) if has_valid_image else 1.0
+            max(0.28, draft.opacity_ui / 100) if has_valid_image else 1.0
         )
         self.opacity_label.value = f"{draft.opacity_ui}%"
-        chip_text = self.opacity_chip.content
-        assert isinstance(chip_text, ft.Text)
-        chip_text.value = f"应用 {draft.opacity_ui}%"
-        self.preview_badge.opacity = 1 if has_valid_image else 0.55
+        chip = self.opacity_chip.content
+        assert isinstance(chip, ft.Text)
+        chip.value = f"应用 {draft.opacity_ui}%"
         if draft.validation_error:
             self.preview_message.value = draft.validation_error
             self.preview_message.color = ERROR
         elif not draft.image_path:
-            self.preview_message.value = "紫霓幻境 · 选择本地壁纸开始预览"
+            self.preview_message.value = "选择一张图片，预览会在这里展开"
             self.preview_message.color = MUTED
         else:
             self.preview_message.value = ""
         self.apply_label.value = f"应用到 {APP_NAMES[self.active_app]}"
-        self.apply_button.opacity = 1 if can_apply(draft) else 0.45
+        self.apply_button.opacity = 1 if can_apply(draft) else 0.4
         self.apply_button.disabled = not can_apply(draft)
-        self.clear_button.opacity = 1 if draft.installed else 0.4
+        self.clear_button.opacity = 1 if draft.installed else 0.35
         self.clear_button.disabled = not draft.installed
 
     def _show_snack(self, message: str, color: str) -> None:
@@ -700,7 +634,7 @@ class WallpaperManagerUI:
                 bgcolor=PANEL_ELEVATED,
                 close_icon_color=color,
                 show_close_icon=True,
-                elevation=8,
+                elevation=6,
             )
         )
 
@@ -711,14 +645,14 @@ def main(page: ft.Page) -> None:
     page.theme_mode = ft.ThemeMode.DARK
     page.theme = ft.Theme(
         color_scheme_seed=ACCENT,
-        splash_color="#e879f944",
-        highlight_color="#c084fc33",
+        splash_color="#e879f933",
+        highlight_color="#c084fc22",
     )
     page.padding = 0
-    page.window.width = 1020
-    page.window.height = 860
-    page.window.min_width = 820
-    page.window.min_height = 700
+    page.window.width = 1000
+    page.window.height = 820
+    page.window.min_width = 800
+    page.window.min_height = 680
     ui = WallpaperManagerUI(page, build_default_service())
     page.add(ui.build())
     page.run_task(ui._play_entrance)

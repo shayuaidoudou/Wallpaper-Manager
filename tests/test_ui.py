@@ -11,14 +11,14 @@ from wallpaper_manager.ui.theme import ACCENT, ACCENT_2, BG, MUTED, PANEL, SUCCE
 
 def test_midnight_glass_theme_constants():
     assert (BG, PANEL, ACCENT, ACCENT_2, TEXT, MUTED) == (
-        "#09060f",
-        "#161022",
+        "#0a0612",
+        "#14101f",
         "#c084fc",
-        "#e879f9",
+        "#f0abfc",
         "#faf5ff",
-        "#b6a4d4",
+        "#a89bbf",
     )
-    assert SUCCESS == "#d8b4fe"
+    assert SUCCESS == "#e9d5ff"
 
 
 def test_apply_requires_installed_app_and_valid_image():

@@ -1,32 +1,30 @@
-"""Violet Luxe visual tokens — glamorous purple motion chrome."""
+"""Violet Noir — refined purple glass theme."""
 
 from __future__ import annotations
 
 import flet as ft
 
-BG = "#09060f"
-BG_MID = "#120a1c"
-PANEL = "#161022"
-PANEL_ELEVATED = "#1c1430"
+BG = "#0a0612"
+PANEL = "#14101f"
+PANEL_ELEVATED = "#1a1528"
 ACCENT = "#c084fc"
-ACCENT_2 = "#e879f9"
-ACCENT_DIM = "#7c3aed"
+ACCENT_2 = "#f0abfc"
+ACCENT_DIM = "#9333ea"
 TEXT = "#faf5ff"
-MUTED = "#b6a4d4"
-PANEL_BORDER = "#3b2758"
-PANEL_BORDER_LIT = "#6d28d9"
+MUTED = "#a89bbf"
+PANEL_BORDER = "#2e2148"
+PANEL_BORDER_LIT = "#7c3aed"
 ERROR = "#fb7185"
-SUCCESS = "#d8b4fe"  # lilac, keeps palette purple (not neon green)
-GLOW = "#a855f755"
-GLOW_SOFT = "#c084fc33"
+SUCCESS = "#e9d5ff"
+HAIRLINE = "#ffffff14"
 
 
 def page_gradient() -> ft.LinearGradient:
     return ft.LinearGradient(
-        begin=ft.Alignment.TOP_LEFT,
-        end=ft.Alignment.BOTTOM_RIGHT,
-        colors=["#1a0b2e", BG, "#05030a"],
-        stops=[0.0, 0.48, 1.0],
+        begin=ft.Alignment(-1, -1),
+        end=ft.Alignment(1, 1),
+        colors=["#1c1030", BG, "#07040c"],
+        stops=[0.0, 0.55, 1.0],
     )
 
 
@@ -34,75 +32,60 @@ def accent_gradient() -> ft.LinearGradient:
     return ft.LinearGradient(
         begin=ft.Alignment.TOP_LEFT,
         end=ft.Alignment.BOTTOM_RIGHT,
-        colors=["#f0abfc", "#e879f9", "#a855f7", "#7c3aed"],
+        colors=["#f5d0fe", "#e879f9", "#a855f7"],
     )
 
 
-def glass_shadow() -> list[ft.BoxShadow]:
+def panel_gradient() -> ft.LinearGradient:
+    return ft.LinearGradient(
+        begin=ft.Alignment.TOP_CENTER,
+        end=ft.Alignment.BOTTOM_CENTER,
+        colors=["#1c1630ee", "#120e1cf5"],
+    )
+
+
+def elev_shadow() -> list[ft.BoxShadow]:
     return [
         ft.BoxShadow(
             spread_radius=0,
-            blur_radius=32,
-            color="#00000066",
-            offset=ft.Offset(0, 14),
+            blur_radius=28,
+            color="#00000073",
+            offset=ft.Offset(0, 16),
         ),
         ft.BoxShadow(
             spread_radius=0,
-            blur_radius=24,
-            color=GLOW,
+            blur_radius=20,
+            color="#a855f722",
             offset=ft.Offset(0, 0),
         ),
     ]
 
 
-def soft_shadow() -> list[ft.BoxShadow]:
+def glow_shadow() -> list[ft.BoxShadow]:
     return [
         ft.BoxShadow(
             spread_radius=0,
             blur_radius=18,
-            color="#c084fc33",
-            offset=ft.Offset(0, 8),
-        ),
-    ]
-
-
-def selected_shadow() -> list[ft.BoxShadow]:
-    return [
-        ft.BoxShadow(
-            spread_radius=0,
-            blur_radius=22,
-            color="#e879f966",
+            color="#e879f955",
             offset=ft.Offset(0, 0),
         ),
     ]
 
 
-def ambient_orb(
-    *,
-    size: float,
-    color: str,
-    top: float | None = None,
-    left: float | None = None,
-    right: float | None = None,
-    bottom: float | None = None,
-    opacity: float = 0.55,
-) -> ft.Container:
+def soft_orb(size: float, color: str, **pos) -> ft.Container:
     return ft.Container(
         width=size,
         height=size,
-        top=top,
-        left=left,
-        right=right,
-        bottom=bottom,
         border_radius=size,
         gradient=ft.RadialGradient(
             center=ft.Alignment.CENTER,
-            radius=0.85,
+            radius=0.9,
             colors=[color, "#00000000"],
         ),
-        animate_opacity=ft.Animation(2000, ft.AnimationCurve.EASE_IN_OUT),
-        animate_scale=ft.Animation(2400, ft.AnimationCurve.EASE_IN_OUT),
-        opacity=opacity,
-        scale=1.0,
+        opacity=0.55,
+        scale=1,
+        animate_opacity=ft.Animation(3200, ft.AnimationCurve.EASE_IN_OUT),
+        animate_scale=ft.Animation(3800, ft.AnimationCurve.EASE_IN_OUT),
         ignore_interactions=True,
+        **pos,
     )
