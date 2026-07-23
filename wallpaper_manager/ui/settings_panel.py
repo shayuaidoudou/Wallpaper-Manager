@@ -1,4 +1,4 @@
-"""Path configuration panel — manual IDE/config file locations."""
+"""Path configuration panel — pick app data folders, auto-resolve config files."""
 
 from __future__ import annotations
 
@@ -8,6 +8,11 @@ from pathlib import Path
 import flet as ft
 
 from wallpaper_manager.core.models import AppId
+from wallpaper_manager.core.path_config import (
+    config_dir_hint,
+    data_root_guidance,
+    resolve_config_from_user_selection,
+)
 from wallpaper_manager.core.service import WallpaperService
 from wallpaper_manager.ui import motion as m
 from wallpaper_manager.ui.theme import (
@@ -47,7 +52,7 @@ class SettingsPanel:
         self.on_toast = on_toast
         self._fields: dict[AppId, ft.TextField] = {}
         self._status: dict[AppId, ft.Text] = {}
-        self._pick_target: AppId | None = None
+        self._resolved: dict[AppId, ft.Text] = {}
         self.file_picker = ft.FilePicker()
         self.page.services.append(self.file_picker)
         self.root = self._build()
@@ -59,16 +64,20 @@ class SettingsPanel:
         for app_id in self.app_order:
             info = self.service.path_info(app_id)
             field = self._fields[app_id]
+            # Show resolved config file; hint tells users which folder to pick.
             field.value = info.override_path or info.auto_path or ""
-            field.hint_text = info.hint
+            field.hint_text = config_dir_hint(app_id)
             self._status[app_id].value = self._status_text(info)
             self._status[app_id].color = SUCCESS if info.exists else ERROR
+            self._resolved[app_id].value = (
+                f"将写入：{info.effective_path}" if info.effective_path else "尚未解析到配置文件"
+            )
         self.page.update()
 
     def _status_text(self, info) -> str:
         mode = "手动" if info.using_override else "自动检测"
         state = "已找到" if info.exists else "未找到文件"
-        return f"{mode} · {state} · 目标：{info.label}"
+        return f"{mode} · {state} · 目标文件：{info.label}"
 
     def _build(self) -> ft.Control:
         rows: list[ft.Control] = []
@@ -76,9 +85,10 @@ class SettingsPanel:
             info = self.service.path_info(app_id)
             field = ft.TextField(
                 value=info.override_path or info.auto_path or "",
-                hint_text=info.hint,
+                hint_text=config_dir_hint(app_id),
+                label="数据目录或已解析的配置文件路径",
+                label_style=ft.TextStyle(color=MUTED, size=11),
                 color=TEXT,
-                label_style=ft.TextStyle(color=MUTED, size=12),
                 bgcolor=opa(0.88, "#0c0916"),
                 border_color=PANEL_BORDER,
                 focused_border_color=ACCENT,
@@ -92,11 +102,17 @@ class SettingsPanel:
                 size=11,
                 color=SUCCESS if info.exists else ERROR,
             )
+            resolved = ft.Text(
+                f"将写入：{info.effective_path}" if info.effective_path else "尚未解析到配置文件",
+                size=11,
+                color=MUTED,
+            )
             self._fields[app_id] = field
             self._status[app_id] = status
+            self._resolved[app_id] = resolved
 
             browse = ft.Container(
-                content=ft.Text("浏览", color=ACCENT_2, weight=ft.FontWeight.W_700),
+                content=ft.Text("选择目录", color=ACCENT_2, weight=ft.FontWeight.W_700),
                 padding=ft.Padding.symmetric(horizontal=14, vertical=12),
                 border_radius=14,
                 border=ft.Border.all(1, ACCENT),
@@ -152,6 +168,7 @@ class SettingsPanel:
                                 color=TEXT,
                             ),
                             status,
+                            resolved,
                             ft.Row([field, browse], spacing=8),
                             ft.Row([reset, save], spacing=8),
                         ],
@@ -200,7 +217,7 @@ class SettingsPanel:
                                     color=TEXT,
                                 ),
                                 ft.Text(
-                                    "填写各应用的配置文件路径。留空并点「自动」可恢复检测。",
+                                    data_root_guidance(),
                                     size=13,
                                     color=MUTED,
                                 ),
@@ -227,15 +244,27 @@ class SettingsPanel:
 
     def _browse_handler(self, app_id: AppId):
         async def _handler(_event: ft.ControlEvent) -> None:
-            self._pick_target = app_id
-            files = await self.file_picker.pick_files(
-                dialog_title=f"选择 {self.app_names[app_id]} 配置文件",
-                allow_multiple=False,
+            directory = await self.file_picker.get_directory_path(
+                dialog_title=f"选择 {self.app_names[app_id]} 数据目录",
             )
-            if not files:
+            if not directory:
                 return
-            self._fields[app_id].value = files[0].path
+            resolved, error = resolve_config_from_user_selection(app_id, directory)
+            if error or resolved is None:
+                await self._emit_toast(
+                    f"{self.app_names[app_id]}：{error or '无法解析'}",
+                    ERROR,
+                )
+                self._fields[app_id].value = directory
+                self.page.update()
+                return
+            self._fields[app_id].value = str(resolved)
+            self._resolved[app_id].value = f"将写入：{resolved}"
             self.page.update()
+            await self._emit_toast(
+                f"已从目录解析到 {self.app_names[app_id]} 配置文件",
+                SUCCESS,
+            )
 
         return _handler
 
@@ -243,18 +272,18 @@ class SettingsPanel:
         async def _handler(_event: ft.ControlEvent) -> None:
             raw = (self._fields[app_id].value or "").strip()
             try:
-                if raw:
-                    path = Path(raw).expanduser()
-                    if not path.exists() and not path.parent.exists():
-                        await self._emit_toast(
-                            f"{self.app_names[app_id]} 路径无效：目录不存在",
-                            ERROR,
-                        )
-                        return
-                info = self.service.set_path_override(app_id, raw or None)
+                if not raw:
+                    info = self.service.set_path_override(app_id, None)
+                else:
+                    info = self.service.set_path_override(app_id, raw)
                 self._fields[app_id].value = info.override_path or info.auto_path or ""
                 self._status[app_id].value = self._status_text(info)
                 self._status[app_id].color = SUCCESS if info.exists else ERROR
+                self._resolved[app_id].value = (
+                    f"将写入：{info.effective_path}"
+                    if info.effective_path
+                    else "尚未解析到配置文件"
+                )
                 self.on_paths_changed()
                 self.page.update()
                 await self._emit_toast(
@@ -272,6 +301,11 @@ class SettingsPanel:
             self._fields[app_id].value = info.auto_path or ""
             self._status[app_id].value = self._status_text(info)
             self._status[app_id].color = SUCCESS if info.exists else ERROR
+            self._resolved[app_id].value = (
+                f"将写入：{info.effective_path}"
+                if info.effective_path
+                else "尚未解析到配置文件"
+            )
             self.on_paths_changed()
             self.page.update()
             await self._emit_toast(

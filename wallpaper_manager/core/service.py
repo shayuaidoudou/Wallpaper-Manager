@@ -11,10 +11,11 @@ from wallpaper_manager.adapters.vscode import VsCodeAdapter
 from wallpaper_manager.core.image_service import validate_image_path
 from wallpaper_manager.core.models import AppId, WallpaperState
 from wallpaper_manager.core.path_config import (
+    config_dir_hint,
     CONFIG_FILE_LABELS,
-    CONFIG_PATH_HINTS,
     auto_config_path,
     normalize_config_path,
+    resolve_config_from_user_selection,
 )
 from wallpaper_manager.core.state_store import StateStore
 
@@ -164,7 +165,7 @@ class WallpaperService:
         return AppPathInfo(
             app_id=app_id,
             label=CONFIG_FILE_LABELS[app_id],
-            hint=CONFIG_PATH_HINTS[app_id],
+            hint=config_dir_hint(app_id),
             auto_path=auto_str,
             override_path=override,
             effective_path=effective_str,
@@ -178,7 +179,10 @@ class WallpaperService:
             raise KeyError(app_id)
         cleaned: str | None = None
         if config_path and config_path.strip():
-            cleaned = normalize_config_path(config_path)
+            resolved, error = resolve_config_from_user_selection(app_id, config_path)
+            if error or resolved is None:
+                raise ValueError(error or "无法解析配置路径")
+            cleaned = normalize_config_path(str(resolved))
         self.store.save_path_override(app_id, cleaned)
         setter = getattr(adapter, "set_path_override", None)
         if callable(setter):
