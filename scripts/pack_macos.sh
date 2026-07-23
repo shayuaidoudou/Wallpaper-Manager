@@ -22,34 +22,10 @@ source .venv/bin/activate
 pip install -e ".[dev]" pyinstaller >/dev/null
 
 rm -rf dist "build/${APP_NAME}" "${APP_NAME}.spec"
-ICON_ARG=()
-if [[ -f assets/icon.icns ]]; then
-  ICON_ARG=(-i assets/icon.icns)
-elif [[ -f assets/icon.png ]]; then
-  ICON_ARG=(-i assets/icon.png)
-fi
 
-flet pack main.py \
-  -n "${APP_NAME}" \
-  --product-name "${APP_NAME}" \
-  --product-version "${VERSION}" \
-  --copyright "Copyright (c) 2026 shayuaidoudou" \
-  --bundle-id "store.shayuaidoudou.wallpaper-manager" \
-  --distpath dist \
-  "${ICON_ARG[@]}" \
-  --add-data "assets/entitlements.plist:assets" \
-  --hidden-import PIL \
-  --hidden-import httpx \
-  --hidden-import wallpaper_manager \
-  --hidden-import wallpaper_manager.ui.app \
-  --hidden-import wallpaper_manager.ui.gallery_panel \
-  --hidden-import wallpaper_manager.runtime_branding \
-  --hidden-import wallpaper_manager.gallery \
-  --hidden-import wallpaper_manager.adapters.vscode \
-  --hidden-import wallpaper_manager.adapters.cursor \
-  --hidden-import wallpaper_manager.adapters.jetbrains \
-  --hidden-import wallpaper_manager.adapters.ghostty \
-  -y
+# Onedir build (via our driver script): onefile .app bundles break macOS TCC —
+# folder-access permission is re-asked on every launch.
+python scripts/pack_macos_onedir.py "${VERSION}"
 
 # Re-sign with entitlements so the macOS file/folder picker works
 # (file_selector_macos requires the user-selected read-write entitlement,

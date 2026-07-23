@@ -1,6 +1,6 @@
 [project]
 name = "wallpaper-manager"
-version = "0.2.3"
+version = "0.2.4"
 description = "Unified wallpaper manager for VS Code, Cursor, IDEA, PyCharm, and Ghostty"
 readme = "README.md"
 requires-python = ">=3.11"
