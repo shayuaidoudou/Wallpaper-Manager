@@ -42,6 +42,7 @@ flet pack main.py \
   --hidden-import wallpaper_manager \
   --hidden-import wallpaper_manager.ui.app \
   --hidden-import wallpaper_manager.ui.gallery_panel \
+  --hidden-import wallpaper_manager.runtime_branding \
   --hidden-import wallpaper_manager.gallery \
   --hidden-import wallpaper_manager.adapters.vscode \
   --hidden-import wallpaper_manager.adapters.cursor \
