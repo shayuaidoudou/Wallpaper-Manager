@@ -1,5 +1,7 @@
 def main() -> None:
-    print("Wallpaper Manager scaffold OK")
+    from wallpaper_manager.ui.app import run_app
+
+    run_app()
 
 
 if __name__ == "__main__":

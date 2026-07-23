@@ -1,0 +1,10 @@
+BG = "#0b0d12"
+PANEL = "#141a22"
+ACCENT = "#38bdf8"
+ACCENT_2 = "#22d3ee"
+TEXT = "#eef2f7"
+MUTED = "#8b95a8"
+
+PANEL_BORDER = "#263342"
+ERROR = "#fb7185"
+SUCCESS = "#34d399"
