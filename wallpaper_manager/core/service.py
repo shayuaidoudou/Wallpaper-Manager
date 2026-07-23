@@ -33,7 +33,9 @@ class WallpaperService:
                 else:
                     entry = stored.get(app_id, {})
                     image_path = entry.get("image_path")
-                    opacity_ui = entry.get("opacity_ui") or DEFAULT_OPACITY_UI
+                    opacity_ui = entry.get("opacity_ui")
+                    if opacity_ui is None:
+                        opacity_ui = DEFAULT_OPACITY_UI
                 states[app_id] = WallpaperState(
                     app_id=app_id,
                     image_path=image_path,
@@ -42,10 +44,14 @@ class WallpaperService:
                 )
             except Exception as exc:
                 entry = stored.get(app_id, {})
+                stored_opacity = entry.get("opacity_ui")
+                opacity_ui = (
+                    DEFAULT_OPACITY_UI if stored_opacity is None else stored_opacity
+                )
                 states[app_id] = WallpaperState(
                     app_id=app_id,
                     image_path=entry.get("image_path"),
-                    opacity_ui=entry.get("opacity_ui") or DEFAULT_OPACITY_UI,
+                    opacity_ui=opacity_ui,
                     installed=False,
                     last_error=str(exc),
                 )

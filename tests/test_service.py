@@ -79,6 +79,31 @@ def test_bootstrap_uses_store_when_adapter_is_not_detected(tmp_path: Path):
     assert state.opacity_ui == 35
 
 
+def test_bootstrap_preserves_store_opacity_zero_from_store_fallback(tmp_path: Path):
+    store = StateStore(tmp_path / "config.json")
+
+    store.save_app(AppId.VSCODE, "/stored/wallpaper.png", 0)
+    not_detected = FakeAdapter(AppId.VSCODE, installed=False)
+    service = WallpaperService([not_detected], store=store)
+    state = service.bootstrap()[AppId.VSCODE]
+    assert state.installed is False
+    assert state.image_path == "/stored/wallpaper.png"
+    assert state.opacity_ui == 0
+
+    store_path = tmp_path / "config-no-path.json"
+    store_path.write_text(
+        '{"version": 1, "apps": {"vscode": {"image_path": null, "opacity_ui": 0}}}\n',
+        encoding="utf-8",
+    )
+    store_no_path = StateStore(store_path)
+    service = WallpaperService(
+        [FakeAdapter(AppId.VSCODE, installed=False)], store=store_no_path
+    )
+    state = service.bootstrap()[AppId.VSCODE]
+    assert state.image_path is None
+    assert state.opacity_ui == 0
+
+
 def test_bootstrap_adapter_state_wins_over_store(tmp_path: Path):
     store = StateStore(tmp_path / "config.json")
     store.save_app(AppId.VSCODE, "/stored/wallpaper.png", 35)
