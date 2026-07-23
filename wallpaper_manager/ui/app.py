@@ -51,7 +51,10 @@ def normalize_image_path(image_path: str) -> str:
 
 def apply_success_message(app_id: AppId) -> str:
     if app_id in (AppId.VSCODE, AppId.CURSOR):
-        return f"已应用到 {APP_NAMES[app_id]}。请重新加载窗口以查看效果。"
+        return (
+            f"已应用到 {APP_NAMES[app_id]}。"
+            "请完全退出后再打开，或命令面板执行 Developer: Reload Window。"
+        )
     return f"已应用到 {APP_NAMES[app_id]}。如未立即生效，请重新启动 IDE。"
 
 
@@ -204,13 +207,27 @@ class WallpaperManagerUI:
                     preview,
                     ft.Text("图片来源", size=12, color=MUTED),
                     ft.Row([self.path_field, browse_button], spacing=12),
-                    ft.Row(
+                    ft.Column(
                         [
-                            ft.Text("不透明度", color=TEXT, weight=ft.FontWeight.W_500),
-                            self.opacity_slider,
-                            self.opacity_label,
+                            ft.Row(
+                                [
+                                    ft.Text(
+                                        "图片透明度",
+                                        color=TEXT,
+                                        weight=ft.FontWeight.W_500,
+                                    ),
+                                    self.opacity_slider,
+                                    self.opacity_label,
+                                ],
+                                spacing=12,
+                            ),
+                            ft.Text(
+                                "0% = 图片完全透明（显示主题底色，不是强制纯黑）",
+                                color=MUTED,
+                                size=12,
+                            ),
                         ],
-                        spacing=12,
+                        spacing=4,
                     ),
                     ft.Row(
                         [self.clear_button, self.apply_button],
@@ -360,9 +377,11 @@ class WallpaperManagerUI:
             else ""
         )
         self.preview_image.visible = has_valid_image
-        self.preview_overlay.bgcolor = ft.Colors.with_opacity(
-            1 - draft.opacity_ui / 100, "#000000"
+        # Match background-cover: opacity fades the image itself, not a black veil.
+        self.preview_image.opacity = (
+            (draft.opacity_ui / 100) if has_valid_image else 1.0
         )
+        self.preview_overlay.bgcolor = ft.Colors.with_opacity(0.0, "#000000")
         self.opacity_label.value = f"{draft.opacity_ui}%"
         if draft.validation_error:
             self.preview_message.value = draft.validation_error

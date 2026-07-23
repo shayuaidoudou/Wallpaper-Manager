@@ -31,7 +31,7 @@ def test_apply_requires_installed_app_and_valid_image():
 
 
 def test_success_message_has_target_specific_reload_hint():
-    assert "重新加载窗口" in apply_success_message(AppId.VSCODE)
+    assert "Reload Window" in apply_success_message(AppId.VSCODE)
     assert "重新启动 IDE" in apply_success_message(AppId.IDEA)
     assert APP_NAMES[AppId.PYCHARM] == "PyCharm"
 

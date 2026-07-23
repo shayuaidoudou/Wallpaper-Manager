@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from wallpaper_manager.adapters.background_cover_dom import sync_electron_css
 from wallpaper_manager.adapters.settings_json import (
     clear_background_cover,
     read_background_cover,
@@ -25,9 +26,11 @@ class CursorAdapter:
 
     def apply(self, image_path: str, opacity_ui: int) -> None:
         write_background_cover(self.settings_path, image_path, opacity_ui)
+        sync_electron_css("cursor", image_path, opacity_ui)
 
     def clear(self) -> None:
         clear_background_cover(self.settings_path)
+        sync_electron_css("cursor", None, 0)
 
     def extension_installed(self) -> bool:
         return any(
