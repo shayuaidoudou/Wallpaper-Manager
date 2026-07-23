@@ -94,7 +94,11 @@ class WallpaperManagerUI:
             gradient=ft.LinearGradient(
                 begin=ft.Alignment.TOP_CENTER,
                 end=ft.Alignment.BOTTOM_CENTER,
-                colors=["#0a061200", "#0a061266", "#0a0612cc"],
+                colors=[
+                    ft.Colors.with_opacity(0.0, BG),
+                    ft.Colors.with_opacity(0.4, BG),
+                    ft.Colors.with_opacity(0.8, BG),
+                ],
             ),
             ignore_interactions=True,
         )
@@ -108,7 +112,7 @@ class WallpaperManagerUI:
             content=ft.Text("预览", size=11, weight=ft.FontWeight.W_600, color=TEXT),
             padding=ft.Padding.symmetric(horizontal=12, vertical=6),
             border_radius=999,
-            bgcolor="#1a1328cc",
+            bgcolor=ft.Colors.with_opacity(0.82, "#1a1328"),
             border=ft.Border.all(1, HAIRLINE),
             right=14,
             top=14,
@@ -117,7 +121,7 @@ class WallpaperManagerUI:
             content=ft.Text("应用 25%", size=11, weight=ft.FontWeight.W_700, color=ACCENT_2),
             padding=ft.Padding.symmetric(horizontal=12, vertical=6),
             border_radius=999,
-            bgcolor="#1a1328cc",
+            bgcolor=ft.Colors.with_opacity(0.82, "#1a1328"),
             border=ft.Border.all(1, ACCENT_DIM),
             left=14,
             bottom=14,
@@ -126,7 +130,7 @@ class WallpaperManagerUI:
         self.ring_glow = ft.Container(
             expand=True,
             border_radius=22,
-            border=ft.Border.all(1.5, "#a855f700"),
+            border=ft.Border.all(1.5, ft.Colors.with_opacity(0.0, ACCENT)),
             animate=ft.Animation(420, ft.AnimationCurve.EASE_OUT),
             ignore_interactions=True,
         )
@@ -136,7 +140,7 @@ class WallpaperManagerUI:
             prefix_icon=ft.Icons.IMAGE_OUTLINED,
             color=TEXT,
             label_style=ft.TextStyle(color=MUTED, size=12),
-            bgcolor="#100c1acc",
+            bgcolor=ft.Colors.with_opacity(0.85, "#100c1a"),
             border_color=PANEL_BORDER,
             focused_border_color=ACCENT,
             border_radius=14,
@@ -251,7 +255,7 @@ class WallpaperManagerUI:
             border_radius=14,
             expand=True,
             alignment=ft.Alignment.CENTER,
-            bgcolor="#c084fc33" if selected else "#00000000",
+            bgcolor=ft.Colors.with_opacity(0.2, ACCENT) if selected else "#00000000",
             border=ft.Border.all(1, ACCENT if selected else "#00000000"),
             shadow=glow_shadow() if selected else None,
             animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
@@ -273,7 +277,7 @@ class WallpaperManagerUI:
         for app_id, tab in self._tab_buttons.items():
             draft = self.drafts[app_id]
             selected = app_id == self.active_app
-            tab.bgcolor = "#c084fc33" if selected else "#00000000"
+            tab.bgcolor = ft.Colors.with_opacity(0.2, ACCENT) if selected else "#00000000"
             tab.border = ft.Border.all(1, ACCENT if selected else "#00000000")
             tab.shadow = glow_shadow() if selected else None
             tab.scale = 1.02 if selected else 1.0
@@ -410,7 +414,7 @@ class WallpaperManagerUI:
             padding=ft.Padding.symmetric(horizontal=18, vertical=14),
             border_radius=14,
             border=ft.Border.all(1, ACCENT),
-            bgcolor="#a855f718",
+            bgcolor=ft.Colors.with_opacity(0.12, ACCENT),
             on_click=self._on_browse,
             animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT),
             ink=False,
@@ -466,8 +470,8 @@ class WallpaperManagerUI:
             expand=True,
         )
 
-        self.orb_a = soft_orb(340, "#a855f728", top=-120, right=-80)
-        self.orb_b = soft_orb(280, "#e879f918", bottom=-120, left=-90)
+        self.orb_a = soft_orb(340, "#a855f7", opacity=0.22, top=-120, right=-80)
+        self.orb_b = soft_orb(280, "#e879f9", opacity=0.14, bottom=-120, left=-90)
 
         self.root_shell = ft.Container(
             expand=True,
@@ -574,7 +578,7 @@ class WallpaperManagerUI:
         message = apply_success_message(applied_app)
         self._show_snack(f"{message} {tip}" if tip else message, SUCCESS)
         await asyncio.sleep(0.55)
-        self.ring_glow.border = ft.Border.all(1.5, "#a855f700")
+        self.ring_glow.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.0, ACCENT))
         if self.active_app == applied_app:
             self.apply_label.value = f"应用到 {applied_name}"
             self.apply_icon.name = ft.Icons.AUTO_AWESOME
@@ -645,8 +649,8 @@ def main(page: ft.Page) -> None:
     page.theme_mode = ft.ThemeMode.DARK
     page.theme = ft.Theme(
         color_scheme_seed=ACCENT,
-        splash_color="#e879f933",
-        highlight_color="#c084fc22",
+        splash_color=ft.Colors.with_opacity(0.2, ACCENT_2),
+        highlight_color=ft.Colors.with_opacity(0.12, ACCENT),
     )
     page.padding = 0
     page.window.width = 1000
