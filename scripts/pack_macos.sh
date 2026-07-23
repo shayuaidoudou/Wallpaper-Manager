@@ -37,6 +37,7 @@ flet pack main.py \
   --bundle-id "store.shayuaidoudou.wallpaper-manager" \
   --distpath dist \
   "${ICON_ARG[@]}" \
+  --add-data "assets/entitlements.plist:assets" \
   --hidden-import PIL \
   --hidden-import httpx \
   --hidden-import wallpaper_manager \
@@ -49,6 +50,18 @@ flet pack main.py \
   --hidden-import wallpaper_manager.adapters.jetbrains \
   --hidden-import wallpaper_manager.adapters.ghostty \
   -y
+
+# Re-sign with entitlements so the macOS file/folder picker works
+# (file_selector_macos requires the user-selected read-write entitlement,
+#  otherwise it throws PlatformException(ENTITLEMENT_NOT_FOUND)).
+if [[ -f assets/entitlements.plist ]]; then
+  codesign --force --deep --sign - \
+    --options runtime \
+    --entitlements assets/entitlements.plist \
+    "dist/${APP_NAME}.app"
+  codesign -d --entitlements - --xml "dist/${APP_NAME}.app" >/dev/null 2>&1 \
+    && echo "Re-signed with entitlements."
+fi
 
 mkdir -p release
 rm -f "release/${ZIP_NAME}"
