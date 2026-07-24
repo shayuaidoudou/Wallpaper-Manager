@@ -30,6 +30,10 @@ python scripts/pack_macos_onedir.py "${VERSION}"
 # Re-sign with entitlements so the macOS file/folder picker works
 # (file_selector_macos requires the user-selected read-write entitlement,
 #  otherwise it throws PlatformException(ENTITLEMENT_NOT_FOUND)).
+# Host is a headless launcher (Flet view owns the window). Hide host from Dock.
+/usr/bin/plutil -replace LSUIElement -bool true "dist/${APP_NAME}.app/Contents/Info.plist" 2>/dev/null \
+  || true
+
 if [[ -f assets/entitlements.plist ]]; then
   codesign --force --deep --sign - \
     --options runtime \

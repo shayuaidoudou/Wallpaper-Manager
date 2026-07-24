@@ -1,15 +1,16 @@
 """Ensure frozen macOS builds launch the branded embedded Flet view (Dock icon).
 
-The embedded Flet view is what actually renders the Flutter UI (and runs the
-``file_selector_macos`` plugin behind the folder/file pickers). ``flet pack``
-ships it ad-hoc signed with *no* entitlements, so the picker raises
-``PlatformException(ENTITLEMENT_NOT_FOUND)``. After extracting our own copy we
-re-sign it with an entitlements plist that grants user-selected file access.
+Architecture on macOS:
+- Host process: PyInstaller ``Wallpaper Manager.app`` (Python + Flet server)
+- UI process: extracted Flet/Flutter client under ``~/.wallpaper-manager/flet-view``
 
-Flet runs as a *second* process. If that process uses the same CFBundleIdentifier
-(or is a full GUI app), Dock shows two identical icons. We give the view a
-distinct bundle id and mark it as an agent (LSUIElement) so only the host .app
-owns the Dock tile.
+Both used to show up in the Dock (same name/icon → "two apps", and bouncing when
+focus flips between host and UI). Policy:
+
+- Host keeps the public path ``/Applications/Wallpaper Manager.app`` but is marked
+  ``LSUIElement`` so it does not own a Dock tile.
+- Flet view is the only Dock-visible app: product name ``Wallpaper Manager``,
+  distinct bundle id ``...flet-view``, branded icon + entitlements for pickers.
 """
 
 from __future__ import annotations
@@ -22,11 +23,11 @@ import sys
 import tarfile
 from pathlib import Path
 
-# Bump when branding / Dock policy for the view changes.
-BRAND_MARKER = "brand-v4"
+# Bump when Dock / branding policy for host+view changes.
+BRAND_MARKER = "brand-v5"
 VIEW_DIR = Path.home() / ".wallpaper-manager" / "flet-view"
 VIEW_BUNDLE_ID = "store.shayuaidoudou.wallpaper-manager.flet-view"
-VIEW_DISPLAY_NAME = "Wallpaper Manager UI"
+VIEW_DISPLAY_NAME = "Wallpaper Manager"
 
 
 def _entitlements_path() -> Path | None:
@@ -37,8 +38,39 @@ def _entitlements_path() -> Path | None:
     return candidate if candidate.is_file() else None
 
 
+def _patch_host_as_agent() -> None:
+    """Hide the PyInstaller host from the Dock (it has no real window of its own)."""
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        exe = Path(sys.executable).resolve()
+        # .../Wallpaper Manager.app/Contents/MacOS/Wallpaper Manager
+        app_bundle = exe.parents[1]
+        if app_bundle.suffix != ".app":
+            return
+        info_path = app_bundle / "Contents" / "Info.plist"
+        if not info_path.is_file():
+            return
+        with info_path.open("rb") as fh:
+            info = plistlib.load(fh)
+        if info.get("LSUIElement") is True:
+            return
+        info["LSUIElement"] = True
+        with info_path.open("wb") as fh:
+            plistlib.dump(info, fh)
+        # Best-effort re-sign after plist edit so Gatekeeper is less noisy.
+        entitlements = _entitlements_path()
+        cmd = ["codesign", "--force", "--deep", "--sign", "-"]
+        if entitlements is not None:
+            cmd.extend(["--entitlements", str(entitlements)])
+        cmd.append(str(app_bundle))
+        subprocess.run(cmd, check=False, capture_output=True)
+    except Exception:
+        pass
+
+
 def _patch_view_identity(app_bundle: Path) -> None:
-    """Distinct id + agent app so Dock does not show a second Wallpaper Manager."""
+    """Make the Flet client the single Dock-visible Wallpaper Manager."""
     info_path = app_bundle / "Contents" / "Info.plist"
     if not info_path.is_file():
         return
@@ -51,8 +83,8 @@ def _patch_view_identity(app_bundle: Path) -> None:
     info["CFBundleIdentifier"] = VIEW_BUNDLE_ID
     info["CFBundleName"] = VIEW_DISPLAY_NAME
     info["CFBundleDisplayName"] = VIEW_DISPLAY_NAME
-    # Hide this helper process from the Dock; the host PyInstaller .app remains.
-    info["LSUIElement"] = True
+    # View owns the window → must NOT be an agent.
+    info["LSUIElement"] = False
 
     try:
         with info_path.open("wb") as fh:
@@ -62,7 +94,6 @@ def _patch_view_identity(app_bundle: Path) -> None:
 
 
 def _resign_view(app_bundle: Path) -> None:
-    """Ad-hoc re-sign the extracted view app with file-access entitlements."""
     entitlements = _entitlements_path()
     if entitlements is None or not app_bundle.is_dir():
         return
@@ -86,11 +117,14 @@ def _resign_view(app_bundle: Path) -> None:
 
 
 def prepare_branded_flet_view() -> None:
-    """Point FLET_VIEW_PATH at the icon-patched, entitled client for frozen apps."""
+    """Prepare host + Flet view Dock identity, then set FLET_VIEW_PATH."""
     if sys.platform != "darwin":
         return
     if not getattr(sys, "frozen", False):
         return
+
+    _patch_host_as_agent()
+
     if os.environ.get("FLET_VIEW_PATH"):
         return
 
