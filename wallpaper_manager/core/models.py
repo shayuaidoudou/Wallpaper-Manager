@@ -19,3 +19,26 @@ class WallpaperState:
     opacity_ui: int
     installed: bool
     last_error: str | None = None
+    verify_warning: str | None = None
+
+
+@dataclass
+class PrecheckResult:
+    ok: bool
+    error: str | None = None
+    warning: str | None = None
+    installed: bool = False
+    config_path: str | None = None
+    config_exists: bool = False
+
+
+@dataclass
+class AppDiagnostic:
+    app_id: AppId
+    label: str
+    installed: bool
+    config_path: str | None
+    config_exists: bool
+    extension_ok: bool | None
+    stored_image: str | None
+    backup_count: int

@@ -9,8 +9,14 @@ from wallpaper_manager.adapters.cursor import CursorAdapter
 from wallpaper_manager.adapters.ghostty import GhosttyAdapter
 from wallpaper_manager.adapters.jetbrains import IdeaAdapter, PyCharmAdapter
 from wallpaper_manager.adapters.vscode import VsCodeAdapter
+from wallpaper_manager.core.config_backup import ConfigBackupStore
 from wallpaper_manager.core.image_service import validate_image_path
-from wallpaper_manager.core.models import AppId, WallpaperState
+from wallpaper_manager.core.models import (
+    AppDiagnostic,
+    AppId,
+    PrecheckResult,
+    WallpaperState,
+)
 from wallpaper_manager.core.path_config import (
     config_dir_hint,
     CONFIG_FILE_LABELS,
@@ -46,9 +52,11 @@ class WallpaperService:
         self,
         adapters: list[WallpaperAdapter],
         store: StateStore | None = None,
+        backups: ConfigBackupStore | None = None,
     ) -> None:
         self.adapters = adapters
         self.store = store or StateStore()
+        self.backups = backups or ConfigBackupStore()
         self._adapters = {adapter.app_id: adapter for adapter in adapters}
         self.apply_stored_path_overrides()
 
@@ -94,6 +102,58 @@ class WallpaperService:
 
         return states
 
+    def precheck(self, app_id: AppId, image_path: str) -> PrecheckResult:
+        adapter = self._adapters.get(app_id)
+        if adapter is None:
+            return PrecheckResult(ok=False, error=f"未找到适配器: {app_id.value}")
+
+        valid, error = validate_image_path(image_path)
+        if not valid:
+            return PrecheckResult(ok=False, error=error or "图片路径无效")
+
+        installed = self._detect(adapter)
+        has_path_api = callable(getattr(adapter, "effective_config_path", None))
+        config_path = self._effective_path(adapter) if has_path_api else None
+        config_exists = bool(config_path and Path(config_path).expanduser().exists())
+
+        if not installed:
+            return PrecheckResult(
+                ok=False,
+                error="未检测到该应用的配置目录，请先在「路径配置」中指定",
+                installed=False,
+                config_path=str(config_path) if config_path else None,
+                config_exists=config_exists,
+            )
+
+        # Real adapters expose effective_config_path; test doubles may omit it.
+        if has_path_api:
+            if config_path is None:
+                return PrecheckResult(
+                    ok=False,
+                    error="无法解析配置文件路径，请在「路径配置」中手动选择",
+                    installed=True,
+                    config_path=None,
+                    config_exists=False,
+                )
+            parent = Path(config_path).expanduser().parent
+            if not parent.exists():
+                return PrecheckResult(
+                    ok=False,
+                    error=f"配置目录不存在：{parent}",
+                    installed=True,
+                    config_path=str(config_path),
+                    config_exists=False,
+                )
+
+        warning = self.extension_tip(app_id)
+        return PrecheckResult(
+            ok=True,
+            warning=warning,
+            installed=True,
+            config_path=str(config_path) if config_path else None,
+            config_exists=config_exists,
+        )
+
     def apply(
         self,
         app_id: AppId,
@@ -101,6 +161,7 @@ class WallpaperService:
         opacity_ui: int,
         *,
         history_entry: dict | None = None,
+        skip_precheck: bool = False,
     ) -> WallpaperState:
         adapter = self._adapters.get(app_id)
         if adapter is None:
@@ -108,13 +169,27 @@ class WallpaperService:
                 app_id, image_path, opacity_ui, False, f"未找到适配器: {app_id.value}"
             )
 
-        valid, error = validate_image_path(image_path)
-        if not valid:
-            return WallpaperState(
-                app_id, image_path, opacity_ui, self._detect(adapter), error
-            )
+        if not skip_precheck:
+            check = self.precheck(app_id, image_path)
+            if not check.ok:
+                return WallpaperState(
+                    app_id,
+                    image_path,
+                    opacity_ui,
+                    check.installed,
+                    check.error,
+                )
+            pre_warning = check.warning
+        else:
+            valid, error = validate_image_path(image_path)
+            if not valid:
+                return WallpaperState(
+                    app_id, image_path, opacity_ui, self._detect(adapter), error
+                )
+            pre_warning = self.extension_tip(app_id)
 
         try:
+            self._backup_adapter_config(app_id, adapter)
             adapter.apply(image_path, opacity_ui)
             self.store.save_app(app_id, image_path, opacity_ui)
         except Exception as exc:
@@ -123,9 +198,108 @@ class WallpaperService:
             )
 
         self._record_history(app_id, image_path, opacity_ui, history_entry)
+        verify_warning = self._verify_readback(adapter, image_path, opacity_ui)
+        # Prefer verify note; keep extension tip only when verify is clean.
+        warning = verify_warning or pre_warning
         return WallpaperState(
-            app_id, image_path, opacity_ui, self._detect(adapter), None
+            app_id,
+            image_path,
+            opacity_ui,
+            self._detect(adapter),
+            None,
+            verify_warning=warning,
         )
+
+    def apply_many(
+        self,
+        app_ids: list[AppId],
+        image_path: str,
+        opacity_ui: int,
+        *,
+        history_entry: dict | None = None,
+    ) -> dict[AppId, WallpaperState]:
+        results: dict[AppId, WallpaperState] = {}
+        for app_id in app_ids:
+            results[app_id] = self.apply(
+                app_id,
+                image_path,
+                opacity_ui,
+                history_entry=history_entry,
+            )
+        return results
+
+    def diagnose(self) -> list[AppDiagnostic]:
+        stored = self.store.load()
+        rows: list[AppDiagnostic] = []
+        for app_id, adapter in self._adapters.items():
+            installed = self._detect(adapter)
+            path = self._effective_path(adapter)
+            exists = bool(path and Path(path).expanduser().exists())
+            if app_id in (AppId.VSCODE, AppId.CURSOR):
+                try:
+                    extension_ok = adapter.extension_installed()
+                except Exception:
+                    extension_ok = False
+            else:
+                extension_ok = None
+            entry = stored.get(app_id, {})
+            rows.append(
+                AppDiagnostic(
+                    app_id=app_id,
+                    label=CONFIG_FILE_LABELS.get(app_id, app_id.value),
+                    installed=installed,
+                    config_path=str(path) if path else None,
+                    config_exists=exists,
+                    extension_ok=extension_ok,
+                    stored_image=entry.get("image_path"),
+                    backup_count=len(self.backups.list_backups(app_id)),
+                )
+            )
+        return rows
+
+    def restore_latest_backup(self, app_id: AppId) -> str:
+        adapter = self._adapters.get(app_id)
+        if adapter is None:
+            raise KeyError(app_id)
+        path = self._effective_path(adapter)
+        if path is None:
+            raise FileNotFoundError("无法解析配置路径，请先完成路径配置")
+        restored = self.backups.restore_to(app_id, Path(path))
+        return str(restored)
+
+    def list_backups(self, app_id: AppId) -> list[Path]:
+        return self.backups.list_backups(app_id)
+
+    def _backup_adapter_config(
+        self, app_id: AppId, adapter: WallpaperAdapter
+    ) -> Path | None:
+        path = self._effective_path(adapter)
+        if path is None:
+            return None
+        try:
+            return self.backups.backup_file(app_id, Path(path).expanduser())
+        except OSError:
+            return None
+
+    def _verify_readback(
+        self,
+        adapter: WallpaperAdapter,
+        image_path: str,
+        opacity_ui: int,
+    ) -> str | None:
+        try:
+            read_path, read_opacity = adapter.read()
+        except Exception as exc:
+            return f"已写入，但回读失败：{exc}"
+        expected = str(Path(image_path).expanduser())
+        actual = str(Path(read_path).expanduser()) if read_path else None
+        if actual is None:
+            return "已写入，但回读未看到壁纸路径（部分应用需重启后生效）"
+        if Path(actual).resolve() != Path(expected).resolve():
+            return "已写入，但回读路径不一致，配置可能被 IDE 覆盖"
+        if int(read_opacity) != int(opacity_ui):
+            return "已写入，但透明度回读不一致"
+        return None
 
     def _record_history(
         self,
@@ -175,6 +349,7 @@ class WallpaperService:
             )
 
         try:
+            self._backup_adapter_config(app_id, adapter)
             adapter.clear()
             self.store.clear_app(app_id)
         except Exception as exc:
@@ -293,6 +468,16 @@ class WallpaperService:
             return adapter.detect()
         except Exception:
             return False
+
+    @staticmethod
+    def _effective_path(adapter: WallpaperAdapter) -> Path | None:
+        getter = getattr(adapter, "effective_config_path", None)
+        if not callable(getter):
+            return None
+        try:
+            return getter()
+        except Exception:
+            return None
 
 
 def build_default_service() -> WallpaperService:

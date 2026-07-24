@@ -255,3 +255,123 @@ def test_build_default_service_wires_all_real_adapters():
         GhosttyAdapter,
     ]
     assert [adapter.app_id for adapter in service.adapters] == list(AppId)
+
+
+def test_precheck_rejects_invalid_image(tmp_path: Path):
+    service = WallpaperService(
+        [FakeAdapter(AppId.VSCODE)], store=StateStore(tmp_path / "config.json")
+    )
+    result = service.precheck(AppId.VSCODE, str(tmp_path / "nope.png"))
+    assert result.ok is False
+    assert result.error
+
+
+def test_precheck_rejects_undetected_app(tmp_path: Path):
+    service = WallpaperService(
+        [FakeAdapter(AppId.VSCODE, installed=False)],
+        store=StateStore(tmp_path / "config.json"),
+    )
+    result = service.precheck(AppId.VSCODE, str(make_image(tmp_path)))
+    assert result.ok is False
+    assert "路径配置" in (result.error or "")
+
+
+def test_apply_creates_backup_when_config_exists(tmp_path: Path):
+    from wallpaper_manager.core.config_backup import ConfigBackupStore
+
+    config = tmp_path / "settings.json"
+    config.write_text("{}\n", encoding="utf-8")
+
+    class PathAwareFake(FakeAdapter):
+        def effective_config_path(self):
+            return config
+
+    fake = PathAwareFake(AppId.VSCODE)
+    backups = ConfigBackupStore(tmp_path / "backups")
+    service = WallpaperService(
+        [fake], store=StateStore(tmp_path / "config.json"), backups=backups
+    )
+    image = make_image(tmp_path)
+
+    state = service.apply(AppId.VSCODE, str(image), 40)
+    assert state.last_error is None
+    assert len(backups.list_backups(AppId.VSCODE)) == 1
+
+
+def test_apply_verify_warning_on_path_mismatch(tmp_path: Path):
+    class MismatchFake(FakeAdapter):
+        def apply(self, image_path: str, opacity_ui: int) -> None:
+            # Pretend write succeeded but store a different path.
+            self.path = "/other/wallpaper.png"
+            self.opacity = opacity_ui
+            self.applied.append((image_path, opacity_ui))
+
+    service = WallpaperService(
+        [MismatchFake(AppId.VSCODE)], store=StateStore(tmp_path / "config.json")
+    )
+    state = service.apply(AppId.VSCODE, str(make_image(tmp_path)), 40)
+    assert state.last_error is None
+    assert state.verify_warning
+    assert "不一致" in state.verify_warning
+
+
+def test_apply_many_partial_failure(tmp_path: Path):
+    ok = FakeAdapter(AppId.VSCODE)
+    bad = FakeAdapter(AppId.CURSOR)
+    bad.fail_apply = RuntimeError("cursor locked")
+    service = WallpaperService(
+        [ok, bad], store=StateStore(tmp_path / "config.json")
+    )
+    image = str(make_image(tmp_path))
+    results = service.apply_many([AppId.VSCODE, AppId.CURSOR], image, 33)
+
+    assert results[AppId.VSCODE].last_error is None
+    assert results[AppId.CURSOR].last_error == "cursor locked"
+    assert len(ok.applied) == 1
+    assert bad.applied == []
+
+
+def test_diagnose_reports_extension_and_backup_count(tmp_path: Path):
+    from wallpaper_manager.core.config_backup import ConfigBackupStore
+
+    config = tmp_path / "settings.json"
+    config.write_text("{}\n", encoding="utf-8")
+
+    class PathAwareFake(FakeAdapter):
+        def effective_config_path(self):
+            return config
+
+    fake = PathAwareFake(AppId.VSCODE, extension_installed=False)
+    backups = ConfigBackupStore(tmp_path / "backups")
+    backups.backup_file(AppId.VSCODE, config)
+    service = WallpaperService(
+        [fake], store=StateStore(tmp_path / "config.json"), backups=backups
+    )
+
+    rows = service.diagnose()
+    assert len(rows) == 1
+    assert rows[0].installed is True
+    assert rows[0].extension_ok is False
+    assert rows[0].backup_count == 1
+
+
+def test_restore_latest_backup(tmp_path: Path):
+    from wallpaper_manager.core.config_backup import ConfigBackupStore
+
+    config = tmp_path / "settings.json"
+    config.write_text("original\n", encoding="utf-8")
+
+    class PathAwareFake(FakeAdapter):
+        def effective_config_path(self):
+            return config
+
+    backups = ConfigBackupStore(tmp_path / "backups")
+    service = WallpaperService(
+        [PathAwareFake(AppId.VSCODE)],
+        store=StateStore(tmp_path / "config.json"),
+        backups=backups,
+    )
+    service.apply(AppId.VSCODE, str(make_image(tmp_path)), 20)
+    config.write_text("mutated\n", encoding="utf-8")
+    service.restore_latest_backup(AppId.VSCODE)
+    assert config.read_text(encoding="utf-8") == "original\n"

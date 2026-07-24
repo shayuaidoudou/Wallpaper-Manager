@@ -365,6 +365,13 @@ class WallpaperManagerUI:
             ink=False,
         )
         self.apply_icon = self.apply_icon_wrap.content
+        self.sync_others = ft.Checkbox(
+            label="同步到其他已安装应用",
+            value=False,
+            fill_color=ACCENT,
+            check_color=BG,
+            label_style=ft.TextStyle(color=MUTED, size=12),
+        )
         self.browse_button = ft.Container(
             content=ft.Text("浏览", color=ACCENT_2, weight=ft.FontWeight.W_700, size=13),
             padding=ft.Padding.symmetric(horizontal=16, vertical=14),
@@ -739,6 +746,7 @@ class WallpaperManagerUI:
                     size=11,
                     color=MUTED,
                 ),
+                self.sync_others,
                 ft.Container(height=SPACE_SM),
                 action_bar,
             ],
@@ -1115,10 +1123,28 @@ class WallpaperManagerUI:
         absolute_path = normalize_image_path(draft.image_path or "")
         draft.image_path = absolute_path
         self.path_field.value = absolute_path
-        result = self.service.apply(self.active_app, absolute_path, draft.opacity_ui)
+
+        targets = [self.active_app]
+        if bool(self.sync_others.value):
+            for app_id in APP_ORDER:
+                if app_id == self.active_app:
+                    continue
+                if self.drafts[app_id].installed:
+                    targets.append(app_id)
+
+        results = self.service.apply_many(
+            targets, absolute_path, draft.opacity_ui
+        )
+        result = results[self.active_app]
         if result.last_error:
             await self._show_toast(f"应用失败：{result.last_error}", ERROR, ok=False)
             return
+
+        for app_id, state in results.items():
+            if state.last_error is None:
+                self.drafts[app_id].image_path = absolute_path
+                self.drafts[app_id].opacity_ui = draft.opacity_ui
+                self.drafts[app_id].installed = state.installed
 
         applied_app = self.active_app
         applied_name = APP_NAMES[applied_app]
@@ -1137,9 +1163,24 @@ class WallpaperManagerUI:
         self.preview_shell.scale = 1.0
         self.preview_aura.scale = 1.0
         self.page.update()
-        tip = self.service.extension_tip(applied_app)
+
+        ok_n = sum(1 for s in results.values() if s.last_error is None)
+        fail_n = len(results) - ok_n
         message = apply_success_message(applied_app)
-        await self._show_toast(f"{message} {tip}" if tip else message, SUCCESS)
+        if len(targets) > 1:
+            message = f"已同步 {ok_n}/{len(targets)} 个应用。"
+            if fail_n:
+                failed = [
+                    APP_NAMES[aid]
+                    for aid, s in results.items()
+                    if s.last_error
+                ]
+                message += f" 失败：{'、'.join(failed)}"
+        warn = result.verify_warning
+        if warn:
+            message = f"{message} {warn}"
+        color = SUCCESS if fail_n == 0 else ERROR
+        await self._show_toast(message, color, ok=fail_n == 0)
         await asyncio.sleep(0.45)
         self.ring_glow.border = ft.Border.all(1.5, opa(0.0, ACCENT))
         if self.active_app == applied_app:

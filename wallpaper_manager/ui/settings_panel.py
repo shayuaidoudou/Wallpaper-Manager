@@ -57,6 +57,7 @@ class SettingsPanel:
         self.gallery_dir_field: ft.TextField
         self.file_picker = ft.FilePicker()
         self.page.services.append(self.file_picker)
+        self._diag_column = ft.Column(spacing=8)
         self.root = self._build()
 
     def control(self) -> ft.Control:
@@ -75,6 +76,7 @@ class SettingsPanel:
             self._resolved[app_id].value = (
                 f"将写入：{info.effective_path}" if info.effective_path else "尚未解析到配置文件"
             )
+        self._refresh_diagnostics()
         self.page.update()
 
     def _status_text(self, info) -> str:
@@ -83,7 +85,10 @@ class SettingsPanel:
         return f"{mode} · {state} · 目标文件：{info.label}"
 
     def _build(self) -> ft.Control:
-        rows: list[ft.Control] = [self._build_gallery_dir_section()]
+        rows: list[ft.Control] = [
+            self._build_gallery_dir_section(),
+            self._build_diagnostics_section(),
+        ]
         for app_id in self.app_order:
             info = self.service.path_info(app_id)
             field = ft.TextField(
@@ -244,6 +249,96 @@ class SettingsPanel:
             padding=8,
             radius=30,
         )
+
+    def _build_diagnostics_section(self) -> ft.Control:
+        self._refresh_diagnostics()
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text("诊断与备份", size=14, weight=ft.FontWeight.W_700, color=TEXT),
+                    ft.Text(
+                        "查看各应用连接状态；应用壁纸前会自动备份配置，可一键还原最近一次",
+                        size=11,
+                        color=MUTED,
+                    ),
+                    self._diag_column,
+                ],
+                spacing=8,
+            ),
+            padding=14,
+            border_radius=16,
+            border=ft.Border.all(1, HAIRLINE),
+            bgcolor=opa(0.35, "#141022"),
+        )
+
+    def _refresh_diagnostics(self) -> None:
+        controls: list[ft.Control] = []
+        for row in self.service.diagnose():
+            if row.extension_ok is None:
+                ext = "扩展：不适用"
+            elif row.extension_ok:
+                ext = "扩展：已安装"
+            else:
+                ext = "扩展：未检测到 Background Cover"
+            status = "已连接" if row.installed else "未连接"
+            path_bit = row.config_path or "（无路径）"
+            exists_bit = "文件存在" if row.config_exists else "文件不存在"
+            backup_bit = f"备份 {row.backup_count} 份"
+            summary = ft.Text(
+                f"{self.app_names[row.app_id]} · {status} · {exists_bit} · {ext} · {backup_bit}",
+                size=12,
+                color=SUCCESS if row.installed and row.config_exists else MUTED,
+                weight=ft.FontWeight.W_600,
+            )
+            path_line = ft.Text(path_bit, size=11, color=MUTED)
+            restore = ft.Container(
+                content=ft.Text("恢复最近备份", color=ACCENT_2, weight=ft.FontWeight.W_700, size=12),
+                padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                border_radius=12,
+                border=ft.Border.all(1, ACCENT if row.backup_count else PANEL_BORDER),
+                bgcolor=opa(0.12, ACCENT) if row.backup_count else opa(0.2, "#120e1c"),
+                ink=False,
+                opacity=1 if row.backup_count else 0.4,
+                disabled=row.backup_count == 0,
+            )
+            m.wire_pressable(
+                restore,
+                page=self.page,
+                on_click=self._restore_handler(row.app_id),
+                hover_scale=1.02,
+                press_scale=0.97,
+                is_enabled=lambda count=row.backup_count: count > 0,
+            )
+            controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            summary,
+                            path_line,
+                            ft.Row([restore], spacing=8),
+                        ],
+                        spacing=4,
+                    ),
+                    padding=ft.Padding.symmetric(vertical=4),
+                )
+            )
+        self._diag_column.controls = controls
+
+    def _restore_handler(self, app_id: AppId):
+        async def _handler(_event: ft.ControlEvent) -> None:
+            try:
+                path = self.service.restore_latest_backup(app_id)
+                self._refresh_diagnostics()
+                self.on_paths_changed()
+                self.page.update()
+                await self._emit_toast(
+                    f"已从备份还原 {self.app_names[app_id]}：{Path(path).name}",
+                    SUCCESS,
+                )
+            except Exception as exc:
+                await self._emit_toast(f"还原失败：{exc}", ERROR)
+
+        return _handler
 
     def _build_gallery_dir_section(self) -> ft.Control:
         self.gallery_dir_field = ft.TextField(
