@@ -130,9 +130,22 @@ class NuanxinGalleryClient:
             return save_path
 
         url = build_cdn_url(item, kind="path")
-        response = await self._client.get(url)
-        response.raise_for_status()
-        save_path.write_bytes(response.content)
+        # Stream to disk so large wallpapers do not sit fully in RAM before write.
+        tmp_path = save_path.with_suffix(save_path.suffix + ".part")
+        try:
+            async with self._client.stream("GET", url) as response:
+                response.raise_for_status()
+                with tmp_path.open("wb") as out:
+                    async for chunk in response.aiter_bytes(chunk_size=1024 * 256):
+                        out.write(chunk)
+            tmp_path.replace(save_path)
+        except Exception:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+            raise
         return save_path
 
     async def _fetch_json(self, url: str) -> dict:

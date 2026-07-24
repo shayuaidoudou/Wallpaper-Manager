@@ -33,3 +33,23 @@ def test_reject_corrupt_png(tmp_path: Path):
     ok, err = validate_image_path(str(p))
     assert ok is False
     assert err == "无法读取图片"
+
+
+def test_ensure_preview_image_downscales_large_photo(tmp_path: Path):
+    from PIL import Image
+
+    from wallpaper_manager.core.image_service import ensure_preview_image
+
+    source = tmp_path / "huge.png"
+    Image.new("RGB", (4000, 2500), color=(20, 40, 60)).save(source)
+    cache = tmp_path / "cache"
+
+    preview = Path(ensure_preview_image(source, cache_dir=cache, max_edge=800))
+    assert preview.is_file()
+    assert preview != source.resolve()
+    with Image.open(preview) as img:
+        assert max(img.size) <= 800
+
+    # Second call reuses the cached file.
+    again = Path(ensure_preview_image(source, cache_dir=cache, max_edge=800))
+    assert again == preview

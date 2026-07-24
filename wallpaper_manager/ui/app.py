@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
+import time
 
 import flet as ft
 
-from wallpaper_manager.core.image_service import validate_image_path
+from wallpaper_manager.core.image_service import ensure_preview_image, validate_image_path
 from wallpaper_manager.core.models import AppId
 from wallpaper_manager.core.service import WallpaperService, build_default_service
 from wallpaper_manager.ui import motion as m
@@ -107,6 +108,15 @@ class WallpaperManagerUI:
         self._tab_busy = False
         self._toast_token = 0
         self._last_preview_src = ""
+        self._opacity_drag = False
+        self._pending_preview_src: str | None = None
+        self._preview_build_token = 0
+        self._ambient_paused = False
+        self._last_opacity_label = -1
+        self._last_opacity_chip = -1
+        self._last_opacity_preview = -1
+        self._opacity_ui_flush_ms = 0.0
+        self._opacity_preview_flush_ms = 0.0
         self._showing_settings = False
         self._showing_gallery = False
         self._showing_library = False
@@ -126,11 +136,9 @@ class WallpaperManagerUI:
             fit=ft.BoxFit.COVER,
             expand=True,
             visible=False,
-            fade_in_animation=380,
+            fade_in_animation=0,
             opacity=1,
             scale=1.0,
-            animate_opacity=m.SETTLE,
-            animate_scale=m.SETTLE,
         )
         self.preview_veil = ft.Container(
             expand=True,
@@ -272,17 +280,16 @@ class WallpaperManagerUI:
             on_submit=self._on_path_change,
             expand=True,
         )
-        self.opacity_label = ft.AnimatedSwitcher(
-            content=ft.Text("25%", color=ACCENT_2, weight=ft.FontWeight.W_700, size=15),
-            transition=ft.AnimatedSwitcherTransition.FADE,
-            duration=180,
-            reverse_duration=120,
-            switch_in_curve=ft.AnimationCurve.EASE_OUT,
-            switch_out_curve=ft.AnimationCurve.EASE_IN,
+        self.opacity_label = ft.Text(
+            "25%",
+            color=ACCENT_2,
+            weight=ft.FontWeight.W_700,
+            size=15,
         )
         self.opacity_slider = ft.CupertinoSlider(
             min=0,
             max=100,
+            divisions=100,
             active_color=ACCENT,
             thumb_color="#ffffff",
             on_change=self._on_opacity_change,
@@ -934,6 +941,7 @@ class WallpaperManagerUI:
         self._showing_gallery = True
         self._showing_settings = False
         self._showing_library = False
+        self._ambient_paused = True
         await self._swap_to_overlay(self.gallery_view)
         await self.gallery_panel.reload()
 
@@ -943,6 +951,7 @@ class WallpaperManagerUI:
         self._showing_library = True
         self._showing_settings = False
         self._showing_gallery = False
+        self._ambient_paused = True
         self.library_panel.reload()
         await self._swap_to_overlay(self.library_view)
 
@@ -965,6 +974,7 @@ class WallpaperManagerUI:
         self._showing_settings = False
         self._showing_gallery = False
         self._showing_library = False
+        self._ambient_paused = False
         for view in (self.settings_view, self.gallery_view, self.library_view):
             view.opacity = 0
         self.page.update()
@@ -990,6 +1000,15 @@ class WallpaperManagerUI:
             draft.last_error = tip
         else:
             draft.last_error = None
+        # Warm preview cache off the UI thread before swapping back.
+        if image_path:
+            self._ambient_paused = True
+            try:
+                await asyncio.to_thread(ensure_preview_image, image_path)
+            except Exception:
+                pass
+            finally:
+                self._ambient_paused = False
         if app_id == self.active_app:
             self._load_active_draft(animate_preview=True)
         else:
@@ -1033,6 +1052,10 @@ class WallpaperManagerUI:
 
     async def _ambient_loop(self) -> None:
         while self._motion_running:
+            if self._ambient_paused or self._opacity_drag or self._showing_gallery:
+                await asyncio.sleep(0.35)
+                continue
+
             self._ambient_t += 0.4
             t = self._ambient_t
             a = ambient_phase(t)
@@ -1064,7 +1087,7 @@ class WallpaperManagerUI:
                 s.scale = 0.7 + 0.45 * twinkle
 
             self.page.update()
-            await asyncio.sleep(1.35)
+            await asyncio.sleep(2.2)
 
     def _on_path_change(self, event: ft.Event[ft.TextField]) -> None:
         path = event.control.value.strip()
@@ -1080,13 +1103,48 @@ class WallpaperManagerUI:
 
     def _on_opacity_change(self, event: ft.ControlEvent) -> None:
         draft = self.drafts[self.active_app]
-        draft.opacity_ui = int(round(event.control.value or 0))
-        self._refresh_preview(animate_image=False)
-        self.opacity_chip.scale = 1.04
-        self.page.update()
+        value = int(round(event.control.value or 0))
+        draft.opacity_ui = value
+        self._opacity_drag = True
+        now = time.monotonic() * 1000
 
-    def _on_opacity_settle(self, _event: ft.ControlEvent) -> None:
+        # Labels can update a bit more often than the image opacity itself.
+        if value != self._last_opacity_label and (
+            now - self._opacity_ui_flush_ms >= 33 or value in (0, 100)
+        ):
+            self._set_opacity_label(value)
+            chip = self.opacity_chip.content
+            assert isinstance(chip, ft.Text)
+            chip.value = f"Opacity {value}%"
+            self._last_opacity_label = value
+            self._last_opacity_chip = value
+            self._opacity_ui_flush_ms = now
+
+        if value != self._last_opacity_preview and (
+            now - self._opacity_preview_flush_ms >= 50 or value in (0, 100)
+        ):
+            self.preview_image.opacity = max(0.28, value / 100)
+            self._last_opacity_preview = value
+            self._opacity_preview_flush_ms = now
+            self.opacity_chip.scale = 1.04
+            self.page.update()
+        elif now == self._opacity_ui_flush_ms:
+            self.page.update()
+
+    def _on_opacity_settle(self, event: ft.ControlEvent) -> None:
+        draft = self.drafts[self.active_app]
+        value = int(round(getattr(event.control, "value", None) or draft.opacity_ui))
+        draft.opacity_ui = value
+        self._opacity_drag = False
+        self._set_opacity_label(value)
+        chip = self.opacity_chip.content
+        assert isinstance(chip, ft.Text)
+        chip.value = f"Opacity {value}%"
+        self.preview_image.opacity = max(0.28, value / 100) if draft.image_path else 1.0
         self.opacity_chip.scale = 1.0
+        self._last_opacity_label = value
+        self._last_opacity_chip = value
+        self._last_opacity_preview = value
         self.page.update()
 
     async def _on_browse(self, _event: ft.ControlEvent) -> None:
@@ -1209,40 +1267,52 @@ class WallpaperManagerUI:
         self._refresh_preview(animate_image=animate_preview)
 
     def _set_opacity_label(self, value: int) -> None:
-        self.opacity_label.content = ft.Text(
-            f"{value}%",
-            color=ACCENT_2,
-            weight=ft.FontWeight.W_700,
-            size=15,
+        self.opacity_label.value = f"{value}%"
+
+    def _preview_source_for(self, image_path: str | None) -> str:
+        if not image_path:
+            return ""
+        return ensure_preview_image(image_path)
+
+    def _apply_preview_src(self, src: str, opacity_ui: int, *, has_valid_image: bool) -> None:
+        self.preview_image.src = src
+        self.preview_image.visible = has_valid_image
+        self.preview_image.opacity = (
+            max(0.28, opacity_ui / 100) if has_valid_image else 1.0
         )
+        self.preview_image.scale = 1.0
+        self.preview_placeholder.visible = not has_valid_image
+        self._last_preview_src = src
+        self._last_opacity_preview = opacity_ui if has_valid_image else -1
 
     def _refresh_preview(self, *, animate_image: bool = False) -> None:
         draft = self.drafts[self.active_app]
         has_valid_image = bool(draft.image_path and not draft.validation_error)
-        new_src = (
+        desired_original = (
             normalize_image_path(draft.image_path)
             if has_valid_image and draft.image_path
             else ""
         )
-        src_changed = new_src != self._last_preview_src
-        self._last_preview_src = new_src
 
-        if animate_image and src_changed and has_valid_image:
+        if has_valid_image and desired_original:
+            # Keep current frame until a lightweight preview is ready.
+            if self._last_preview_src and not self.preview_image.visible:
+                self.preview_image.visible = True
             self.preview_placeholder.visible = False
-            self.page.run_task(self._crossfade_preview, new_src, draft.opacity_ui)
-        else:
-            self.preview_image.src = new_src
-            self.preview_image.visible = has_valid_image
-            self.preview_image.opacity = (
-                max(0.28, draft.opacity_ui / 100) if has_valid_image else 1.0
+            self.page.run_task(
+                self._load_preview_async,
+                desired_original,
+                draft.opacity_ui,
             )
-            self.preview_image.scale = 1.015 if has_valid_image else 1.0
-            self.preview_placeholder.visible = not has_valid_image
+        else:
+            self._apply_preview_src("", draft.opacity_ui, has_valid_image=False)
 
         self._set_opacity_label(draft.opacity_ui)
         chip = self.opacity_chip.content
         assert isinstance(chip, ft.Text)
         chip.value = f"Opacity {draft.opacity_ui}%"
+        self._last_opacity_label = draft.opacity_ui
+        self._last_opacity_chip = draft.opacity_ui
         app_chip = self.preview_app_chip.content
         assert isinstance(app_chip, ft.Text)
         app_chip.value = APP_NAMES[self.active_app]
@@ -1265,17 +1335,26 @@ class WallpaperManagerUI:
         self.clear_button.opacity = 1 if draft.installed else 0.35
         self.clear_button.disabled = not draft.installed
 
-    async def _crossfade_preview(self, src: str, opacity_ui: int) -> None:
-        self.preview_placeholder.visible = False
-        self.preview_image.opacity = 0
-        self.preview_image.scale = 1.04
-        self.page.update()
-        await asyncio.sleep(0.12)
-        self.preview_image.src = src
-        self.preview_image.visible = True
-        self.preview_image.opacity = max(0.28, opacity_ui / 100)
-        self.preview_image.scale = 1.015
-        self.page.update()
+    async def _load_preview_async(self, original_path: str, opacity_ui: int) -> None:
+        self._preview_build_token += 1
+        token = self._preview_build_token
+        self._ambient_paused = True
+        try:
+            preview_src = await asyncio.to_thread(
+                ensure_preview_image, original_path
+            )
+            if token != self._preview_build_token:
+                return
+            if preview_src == self._last_preview_src and self.preview_image.visible:
+                self.preview_image.opacity = max(0.28, opacity_ui / 100)
+                self._last_opacity_preview = opacity_ui
+                self.page.update()
+                return
+            self._apply_preview_src(preview_src, opacity_ui, has_valid_image=True)
+            self.page.update()
+        finally:
+            if token == self._preview_build_token:
+                self._ambient_paused = False
 
     async def _show_toast(self, message: str, color: str, *, ok: bool = True) -> None:
         self._toast_token += 1
