@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from wallpaper_manager.adapters.base import WallpaperAdapter
@@ -21,6 +22,7 @@ from wallpaper_manager.core.state_store import StateStore
 from wallpaper_manager.gallery.models import GalleryItem
 from wallpaper_manager.gallery.nuanxin_client import (
     NuanxinGalleryClient,
+    build_cdn_url,
     friendly_network_error,
 )
 
@@ -97,6 +99,8 @@ class WallpaperService:
         app_id: AppId,
         image_path: str,
         opacity_ui: int,
+        *,
+        history_entry: dict | None = None,
     ) -> WallpaperState:
         adapter = self._adapters.get(app_id)
         if adapter is None:
@@ -118,9 +122,50 @@ class WallpaperService:
                 app_id, image_path, opacity_ui, self._detect(adapter), str(exc)
             )
 
+        self._record_history(app_id, image_path, opacity_ui, history_entry)
         return WallpaperState(
             app_id, image_path, opacity_ui, self._detect(adapter), None
         )
+
+    def _record_history(
+        self,
+        app_id: AppId,
+        image_path: str,
+        opacity_ui: int,
+        base: dict | None,
+    ) -> None:
+        entry = dict(base) if base else {
+            "source": "local",
+            "title": Path(image_path).name,
+            "thumb": image_path,
+            "gallery": None,
+        }
+        entry.update(
+            {
+                "image_path": image_path,
+                "app": app_id.value,
+                "opacity_ui": opacity_ui,
+                "applied_at": datetime.now().isoformat(timespec="seconds"),
+            }
+        )
+        try:
+            self.store.add_history(entry)
+        except Exception:
+            # The wallpaper is already applied — a bookkeeping failure must not
+            # surface as an apply error.
+            pass
+
+    def history(self) -> list[dict]:
+        return self.store.load_history()
+
+    def favorites(self) -> list[dict]:
+        return self.store.load_favorites()
+
+    def toggle_favorite(self, entry: dict) -> bool:
+        return self.store.toggle_favorite(entry)
+
+    def favorite_keys(self) -> set[str]:
+        return self.store.favorite_keys()
 
     def clear(self, app_id: AppId) -> WallpaperState:
         adapter = self._adapters.get(app_id)
@@ -230,7 +275,17 @@ class WallpaperService:
             )
         if owns:
             await gallery.aclose()
-        return self.apply(app_id, str(local), opacity_ui)
+        try:
+            thumb = build_cdn_url(item, kind="thumbnail")
+        except ValueError:
+            thumb = str(local)
+        entry = {
+            "source": "gallery",
+            "title": item.display_title,
+            "thumb": thumb,
+            "gallery": item.to_dict(),
+        }
+        return self.apply(app_id, str(local), opacity_ui, history_entry=entry)
 
     @staticmethod
     def _detect(adapter: WallpaperAdapter) -> bool:

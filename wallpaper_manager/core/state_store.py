@@ -7,6 +7,15 @@ from wallpaper_manager.core.models import AppId
 
 DEFAULT_CONFIG_PATH = Path.home() / ".wallpaper-manager" / "config.json"
 DEFAULT_GALLERY_DOWNLOAD_DIR = Path.home() / "Pictures" / "WallpaperManager"
+HISTORY_LIMIT = 60
+
+
+def library_entry_key(entry: dict) -> str:
+    """Identity for dedupe: gallery items key by remote path, locals by file path."""
+    gallery = entry.get("gallery")
+    if isinstance(gallery, dict) and gallery.get("path"):
+        return f"g:{gallery['path']}"
+    return f"l:{entry.get('image_path') or ''}"
 
 
 class StateStore:
@@ -75,6 +84,48 @@ class StateStore:
         self._write_raw(data)
         return path
 
+    def load_history(self) -> list[dict]:
+        return self._load_library_list("history")
+
+    def add_history(self, entry: dict) -> None:
+        data = self._read_raw()
+        library = data.setdefault("library", {})
+        history = [e for e in library.get("history", []) if isinstance(e, dict)]
+        key = library_entry_key(entry)
+        history = [e for e in history if library_entry_key(e) != key]
+        history.insert(0, entry)
+        library["history"] = history[:HISTORY_LIMIT]
+        self._write_raw(data)
+
+    def load_favorites(self) -> list[dict]:
+        return self._load_library_list("favorites")
+
+    def toggle_favorite(self, entry: dict) -> bool:
+        """Add or remove a favorite; returns True when now favorited."""
+        data = self._read_raw()
+        library = data.setdefault("library", {})
+        favorites = [e for e in library.get("favorites", []) if isinstance(e, dict)]
+        key = library_entry_key(entry)
+        remaining = [e for e in favorites if library_entry_key(e) != key]
+        now_favorite = len(remaining) == len(favorites)
+        if now_favorite:
+            remaining.insert(0, entry)
+        library["favorites"] = remaining
+        self._write_raw(data)
+        return now_favorite
+
+    def favorite_keys(self) -> set[str]:
+        return {library_entry_key(e) for e in self.load_favorites()}
+
+    def _load_library_list(self, name: str) -> list[dict]:
+        library = self._read_raw().get("library")
+        if not isinstance(library, dict):
+            return []
+        items = library.get(name)
+        if not isinstance(items, list):
+            return []
+        return [e for e in items if isinstance(e, dict)]
+
     def save_app(self, app_id: AppId, image_path: str, opacity_ui: int) -> None:
         data = self._read_raw()
         data.setdefault("apps", {})[app_id.value] = {
@@ -92,12 +143,19 @@ class StateStore:
 
     def _read_raw(self) -> dict:
         if not self._path.exists():
-            return {"version": 1, "apps": {}, "paths": {}, "gallery": {}}
+            return {
+                "version": 1,
+                "apps": {},
+                "paths": {},
+                "gallery": {},
+                "library": {},
+            }
         raw = json.loads(self._path.read_text(encoding="utf-8"))
         raw.setdefault("version", 1)
         raw.setdefault("apps", {})
         raw.setdefault("paths", {})
         raw.setdefault("gallery", {})
+        raw.setdefault("library", {})
         return raw
 
     def _write_raw(self, data: dict) -> None:
@@ -105,6 +163,7 @@ class StateStore:
         data.setdefault("apps", {})
         data.setdefault("paths", {})
         data.setdefault("gallery", {})
+        data.setdefault("library", {})
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(
             json.dumps(data, indent=2, ensure_ascii=False) + "\n",

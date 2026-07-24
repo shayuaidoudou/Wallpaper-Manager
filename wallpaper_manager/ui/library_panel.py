@@ -1,8 +1,10 @@
-"""Online gallery panel — browse Nuanxin wallpapers, download on apply."""
+"""Library panel — favorites & recently applied wallpapers, one-click re-apply."""
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import datetime
+from pathlib import Path
 
 import flet as ft
 
@@ -12,7 +14,6 @@ from wallpaper_manager.core.state_store import library_entry_key
 from wallpaper_manager.gallery.models import GalleryItem
 from wallpaper_manager.gallery.nuanxin_client import (
     NuanxinGalleryClient,
-    build_cdn_url,
     friendly_network_error,
 )
 from wallpaper_manager.ui import motion as m
@@ -22,7 +23,6 @@ from wallpaper_manager.ui.theme import (
     ERROR,
     HAIRLINE,
     MUTED,
-    PANEL_BORDER,
     SUCCESS,
     TEXT,
     opa,
@@ -34,8 +34,14 @@ OnApplied = Callable[[AppId, str, int], Awaitable[None] | None]
 
 FAVORITE_COLOR = "#f472b6"
 
+MODES = [("favorites", "收藏"), ("history", "最近应用")]
+EMPTY_HINTS = {
+    "favorites": "还没有收藏。在图库或「最近应用」里点亮 ♥ 即可收藏。",
+    "history": "还没有应用记录。设置一次壁纸后会自动出现在这里。",
+}
 
-class GalleryPanel:
+
+class LibraryPanel:
     def __init__(
         self,
         page: ft.Page,
@@ -57,30 +63,15 @@ class GalleryPanel:
         self.on_applied = on_applied
         self.on_toast = on_toast
 
-        self._client = NuanxinGalleryClient()
-        self._categories: list[str] = []
-        self._items: list[GalleryItem] = []
-        self._selected_category: str | None = None
-        self._busy = False
-        self._load_token = 0
+        self._mode = "favorites"
+        self._entries: list[dict] = []
         self._fav_keys: set[str] = set()
+        self._busy = False
+        self._client: NuanxinGalleryClient | None = None
 
         self.target_text = ft.Text("", size=13, color=MUTED)
-        self.dir_text = ft.Text("", size=12, color=MUTED)
-        self.status_text = ft.Text("正在加载分类…", size=12, color=MUTED)
-        self.search_field = ft.TextField(
-            hint_text="搜索标题 / 标签",
-            label_style=ft.TextStyle(color=MUTED, size=11),
-            color=TEXT,
-            bgcolor=opa(0.88, "#0c0916"),
-            border_color=PANEL_BORDER,
-            focused_border_color=ACCENT,
-            border_radius=14,
-            filled=True,
-            cursor_color=ACCENT,
-            on_change=self._on_search_change,
-        )
-        self.category_row = ft.Row(spacing=8, scroll=ft.ScrollMode.AUTO)
+        self.status_text = ft.Text("", size=12, color=MUTED)
+        self.mode_row = ft.Row(spacing=8)
         self.grid = ft.GridView(
             expand=True,
             runs_count=3,
@@ -94,35 +85,16 @@ class GalleryPanel:
     def control(self) -> ft.Control:
         return self.root
 
-    async def reload(self) -> None:
+    def reload(self) -> None:
         app_id = self.active_app()
         self.target_text.value = f"将应用到：{self.app_names[app_id]}"
-        self.dir_text.value = f"下载目录：{self.service.gallery_download_dir()}"
         self._fav_keys = self.service.favorite_keys()
-        self.status_text.value = "正在加载分类…"
-        self.page.update()
-        try:
-            cats = await self._client.list_categories()
-            self._categories = [c.name for c in cats] or [
-                "风景",
-                "动漫",
-                "游戏",
-                "插画",
-                "萌宠",
-                "人像",
-                "影视",
-            ]
-            self._render_categories()
-            if not self._selected_category or self._selected_category not in self._categories:
-                self._selected_category = self._categories[0]
-            await self._load_category(self._selected_category)
-        except Exception as exc:
-            self.status_text.value = f"加载失败：{friendly_network_error(exc)}"
-            self.status_text.color = ERROR
-            self.page.update()
+        self._load_mode()
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     def _build(self) -> ft.Control:
         back = ft.Container(
@@ -155,13 +127,12 @@ class GalleryPanel:
                         ft.Column(
                             [
                                 ft.Text(
-                                    "在线图库",
+                                    "收藏与历史",
                                     size=28,
                                     weight=ft.FontWeight.W_800,
                                     color=TEXT,
                                 ),
                                 self.target_text,
-                                self.dir_text,
                             ],
                             spacing=6,
                             tight=True,
@@ -171,8 +142,7 @@ class GalleryPanel:
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.START,
                 ),
-                self.category_row,
-                self.search_field,
+                self.mode_row,
                 self.status_text,
                 ft.Container(content=self.grid, expand=True),
             ],
@@ -185,13 +155,13 @@ class GalleryPanel:
             radius=30,
         )
 
-    def _render_categories(self) -> None:
+    def _render_modes(self) -> None:
         chips: list[ft.Control] = []
-        for name in self._categories:
-            selected = name == self._selected_category
+        for mode, label in MODES:
+            selected = mode == self._mode
             chip = ft.Container(
                 content=ft.Text(
-                    name,
+                    label,
                     size=12,
                     weight=ft.FontWeight.W_700,
                     color=TEXT if selected else MUTED,
@@ -201,113 +171,47 @@ class GalleryPanel:
                 bgcolor=opa(0.22, ACCENT) if selected else opa(0.35, "#141022"),
                 border=ft.Border.all(1, ACCENT if selected else HAIRLINE),
                 ink=False,
-                data=name,
             )
             m.wire_pressable(
                 chip,
                 page=self.page,
-                on_click=self._category_handler(name),
+                on_click=self._mode_handler(mode),
                 hover_scale=1.03,
                 press_scale=0.97,
             )
             chips.append(chip)
-        self.category_row.controls = chips
+        self.mode_row.controls = chips
 
-    def _category_handler(self, name: str):
-        async def _handler(_event: ft.ControlEvent) -> None:
-            if self._busy or name == self._selected_category:
-                return
-            self._selected_category = name
-            self._render_categories()
-            self.page.update()
-            await self._load_category(name)
-
-        return _handler
-
-    async def _load_category(self, name: str) -> None:
-        self._load_token += 1
-        token = self._load_token
-        self.status_text.value = f"正在加载「{name}」…"
-        self.status_text.color = MUTED
-        self.grid.controls = []
-        self.page.update()
-        try:
-            items = await self._client.list_wallpapers(name)
-            if token != self._load_token:
-                return
-            self._items = items
-            self._render_grid(self._filtered_items())
-            self.status_text.value = f"{name} · {len(items)} 张（仅加载缩略图）"
-            self.status_text.color = MUTED
-        except Exception as exc:
-            if token != self._load_token:
-                return
-            self.status_text.value = f"加载「{name}」失败：{friendly_network_error(exc)}"
-            self.status_text.color = ERROR
-        self.page.update()
-
-    def _filtered_items(self) -> list[GalleryItem]:
-        query = (self.search_field.value or "").strip().lower()
-        if not query:
-            return self._items
-        out: list[GalleryItem] = []
-        for item in self._items:
-            hay = " ".join(
-                [item.display_title, item.filename, " ".join(item.tags)]
-            ).lower()
-            if query in hay:
-                out.append(item)
-        return out
-
-    def _on_search_change(self, _event: ft.ControlEvent) -> None:
-        filtered = self._filtered_items()
-        self._render_grid(filtered)
-        cat = self._selected_category or ""
-        self.status_text.value = f"{cat} · 显示 {len(filtered)}/{len(self._items)}"
-        self.page.update()
-
-    def _render_grid(self, items: list[GalleryItem]) -> None:
-        cards: list[ft.Control] = []
-        for item in items[:120]:
-            cards.append(self._make_card(item))
-        self.grid.controls = cards
-
-    def _fav_entry(self, item: GalleryItem, thumb: str) -> dict:
-        return {
-            "source": "gallery",
-            "title": item.display_title,
-            "image_path": None,
-            "thumb": thumb,
-            "gallery": item.to_dict(),
-            "app": None,
-            "opacity_ui": None,
-            "applied_at": None,
-        }
-
-    def _star_handler(self, item: GalleryItem, thumb: str, star: ft.Container):
+    def _mode_handler(self, mode: str):
         def _handler(_event: ft.ControlEvent) -> None:
-            entry = self._fav_entry(item, thumb)
-            now_favorite = self.service.toggle_favorite(entry)
-            key = library_entry_key(entry)
-            if now_favorite:
-                self._fav_keys.add(key)
-            else:
-                self._fav_keys.discard(key)
-            icon = star.content
-            assert isinstance(icon, ft.Icon)
-            icon.name = (
-                ft.Icons.FAVORITE_ROUNDED
-                if now_favorite
-                else ft.Icons.FAVORITE_BORDER_ROUNDED
-            )
-            icon.color = FAVORITE_COLOR if now_favorite else MUTED
+            if mode == self._mode:
+                return
+            self._mode = mode
+            self._load_mode()
             self.page.update()
 
         return _handler
 
-    def _make_card(self, item: GalleryItem) -> ft.Control:
-        thumb = build_cdn_url(item, kind="thumbnail")
-        star_on = library_entry_key(self._fav_entry(item, thumb)) in self._fav_keys
+    def _load_mode(self) -> None:
+        self._render_modes()
+        if self._mode == "favorites":
+            self._entries = self.service.favorites()
+        else:
+            self._entries = self.service.history()
+        self._render_grid()
+        if not self._entries:
+            self.status_text.value = EMPTY_HINTS[self._mode]
+        else:
+            label = dict(MODES)[self._mode]
+            self.status_text.value = f"{label} · {len(self._entries)} 张"
+        self.status_text.color = MUTED
+
+    def _render_grid(self) -> None:
+        self.grid.controls = [self._make_card(e) for e in self._entries[:120]]
+
+    def _make_card(self, entry: dict) -> ft.Control:
+        thumb_src = entry.get("thumb") or entry.get("image_path") or ""
+        star_on = library_entry_key(entry) in self._fav_keys
         star = ft.Container(
             content=ft.Icon(
                 ft.Icons.FAVORITE_ROUNDED if star_on else ft.Icons.FAVORITE_BORDER_ROUNDED,
@@ -327,12 +231,12 @@ class GalleryPanel:
         m.wire_pressable(
             star,
             page=self.page,
-            on_click=self._star_handler(item, thumb, star),
+            on_click=self._star_handler(entry, star),
             hover_scale=1.08,
             press_scale=0.92,
         )
         apply_btn = ft.Container(
-            content=ft.Text("设为壁纸", size=12, weight=ft.FontWeight.W_700, color=TEXT),
+            content=ft.Text("应用", size=12, weight=ft.FontWeight.W_700, color=TEXT),
             padding=ft.Padding.symmetric(horizontal=10, vertical=8),
             border_radius=12,
             bgcolor=opa(0.28, ACCENT),
@@ -343,7 +247,7 @@ class GalleryPanel:
         m.wire_pressable(
             apply_btn,
             page=self.page,
-            on_click=self._apply_handler(item, apply_btn),
+            on_click=self._apply_handler(entry, apply_btn),
             hover_scale=1.03,
             press_scale=0.96,
         )
@@ -354,7 +258,7 @@ class GalleryPanel:
                         content=ft.Stack(
                             [
                                 ft.Image(
-                                    src=thumb,
+                                    src=thumb_src,
                                     fit=ft.BoxFit.COVER,
                                     expand=True,
                                     border_radius=12,
@@ -369,7 +273,7 @@ class GalleryPanel:
                         bgcolor=opa(0.4, "#120e1c"),
                     ),
                     ft.Text(
-                        item.display_title,
+                        str(entry.get("title") or "未命名"),
                         size=12,
                         color=TEXT,
                         max_lines=1,
@@ -377,7 +281,7 @@ class GalleryPanel:
                         weight=ft.FontWeight.W_600,
                     ),
                     ft.Text(
-                        item.resolution or item.category,
+                        self._subtitle(entry),
                         size=11,
                         color=MUTED,
                         max_lines=1,
@@ -394,7 +298,50 @@ class GalleryPanel:
             bgcolor=opa(0.35, "#141022"),
         )
 
-    def _apply_handler(self, item: GalleryItem, button: ft.Container):
+    def _subtitle(self, entry: dict) -> str:
+        parts: list[str] = []
+        app_raw = entry.get("app")
+        if app_raw:
+            try:
+                parts.append(self.app_names[AppId(app_raw)])
+            except ValueError:
+                pass
+        applied_at = entry.get("applied_at")
+        if applied_at:
+            try:
+                parts.append(
+                    datetime.fromisoformat(str(applied_at)).strftime("%m-%d %H:%M")
+                )
+            except ValueError:
+                pass
+        if not parts:
+            parts.append("在线图库" if entry.get("gallery") else "本地图片")
+        return " · ".join(parts)
+
+    def _star_handler(self, entry: dict, star: ft.Container):
+        def _handler(_event: ft.ControlEvent) -> None:
+            now_favorite = self.service.toggle_favorite(entry)
+            key = library_entry_key(entry)
+            if now_favorite:
+                self._fav_keys.add(key)
+            else:
+                self._fav_keys.discard(key)
+            if self._mode == "favorites" and not now_favorite:
+                self._load_mode()
+            else:
+                icon = star.content
+                assert isinstance(icon, ft.Icon)
+                icon.name = (
+                    ft.Icons.FAVORITE_ROUNDED
+                    if now_favorite
+                    else ft.Icons.FAVORITE_BORDER_ROUNDED
+                )
+                icon.color = FAVORITE_COLOR if now_favorite else MUTED
+            self.page.update()
+
+        return _handler
+
+    def _apply_handler(self, entry: dict, button: ft.Container):
         async def _handler(_event: ft.ControlEvent) -> None:
             if self._busy:
                 return
@@ -402,12 +349,17 @@ class GalleryPanel:
             app_id = self.active_app()
             opacity = self.opacity_for(app_id)
             original = button.content
-            button.content = ft.Text("下载中…", size=12, color=MUTED, weight=ft.FontWeight.W_700)
+            button.content = ft.Text(
+                "应用中…", size=12, color=MUTED, weight=ft.FontWeight.W_700
+            )
             self.page.update()
             try:
-                result = await self.service.apply_gallery_item(
-                    app_id, item, opacity, client=self._client
-                )
+                result = await self._apply_entry(app_id, entry, opacity)
+                if result is None:
+                    await self._emit_toast(
+                        "图片文件已不存在，无法重新应用。", ERROR
+                    )
+                    return
                 if result.last_error:
                     await self._emit_toast(f"失败：{result.last_error}", ERROR)
                     return
@@ -416,8 +368,7 @@ class GalleryPanel:
                 if isinstance(applied, Awaitable):
                     await applied
                 await self._emit_toast(
-                    f"已下载并应用到 {self.app_names[app_id]}",
-                    SUCCESS,
+                    f"已应用到 {self.app_names[app_id]}", SUCCESS
                 )
                 back = self.on_back()
                 if isinstance(back, Awaitable):
@@ -430,6 +381,23 @@ class GalleryPanel:
                 self.page.update()
 
         return _handler
+
+    async def _apply_entry(self, app_id: AppId, entry: dict, opacity: int):
+        local = entry.get("image_path")
+        gallery_meta = entry.get("gallery")
+        if local and Path(str(local)).is_file():
+            base = {k: entry.get(k) for k in ("source", "title", "thumb", "gallery")}
+            return self.service.apply(
+                app_id, str(local), opacity, history_entry=base
+            )
+        if isinstance(gallery_meta, dict) and gallery_meta.get("path"):
+            if self._client is None:
+                self._client = NuanxinGalleryClient()
+            item = GalleryItem.from_dict(gallery_meta)
+            return await self.service.apply_gallery_item(
+                app_id, item, opacity, client=self._client
+            )
+        return None
 
     async def _emit_toast(self, message: str, color: str) -> None:
         result = self.on_toast(message, color)

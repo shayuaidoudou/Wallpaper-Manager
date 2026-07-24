@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,27 @@ class GalleryItem:
     cdn_tag: str
     resolution: str = ""
     tags: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict:
+        data = asdict(self)
+        data["tags"] = list(self.tags)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict) -> GalleryItem:
+        """Rebuild from to_dict() output (JSON round-trip safe)."""
+        return cls(
+            id=str(data.get("id") or ""),
+            filename=str(data.get("filename") or "wallpaper.jpg"),
+            category=str(data.get("category") or ""),
+            display_title=str(data.get("display_title") or "未命名"),
+            path=str(data.get("path") or ""),
+            thumbnail_path=str(data.get("thumbnail_path") or data.get("path") or ""),
+            preview_path=str(data.get("preview_path") or data.get("path") or ""),
+            cdn_tag=str(data.get("cdn_tag") or "v1.1.9"),
+            resolution=str(data.get("resolution") or ""),
+            tags=tuple(str(t) for t in (data.get("tags") or [])),
+        )
 
     @classmethod
     def from_api(cls, raw: dict) -> GalleryItem:

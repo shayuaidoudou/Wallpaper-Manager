@@ -14,6 +14,7 @@ from wallpaper_manager.core.service import WallpaperService, build_default_servi
 from wallpaper_manager.ui import motion as m
 from wallpaper_manager.ui.settings_panel import SettingsPanel
 from wallpaper_manager.ui.gallery_panel import GalleryPanel
+from wallpaper_manager.ui.library_panel import LibraryPanel
 from wallpaper_manager.ui.theme import (
     ACCENT,
     ACCENT_2,
@@ -108,13 +109,17 @@ class WallpaperManagerUI:
         self._last_preview_src = ""
         self._showing_settings = False
         self._showing_gallery = False
+        self._showing_library = False
         self.settings_panel: SettingsPanel | None = None
         self.gallery_panel: GalleryPanel | None = None
+        self.library_panel: LibraryPanel | None = None
         self.main_view: ft.Container
         self.settings_view: ft.Container
         self.gallery_view: ft.Container
+        self.library_view: ft.Container
         self.settings_button: ft.Container
         self.gallery_button: ft.Container
+        self.library_button: ft.Container
 
         self.preview_image = ft.Image(
             src="",
@@ -607,6 +612,17 @@ class WallpaperManagerUI:
             ink=False,
             tooltip="在线图库",
         )
+        self.library_button = ft.Container(
+            content=ft.Icon(ft.Icons.FAVORITE_ROUNDED, size=17, color=ACCENT_2),
+            width=38,
+            height=38,
+            border_radius=19,
+            alignment=ft.Alignment.CENTER,
+            bgcolor=SURFACE,
+            border=ft.Border.all(1, HAIRLINE),
+            ink=False,
+            tooltip="收藏与历史",
+        )
 
         status_chip = glass_chip(
             ft.Row(
@@ -641,6 +657,7 @@ class WallpaperManagerUI:
                         tight=True,
                     ),
                     ft.Container(expand=True),
+                    self.library_button,
                     self.gallery_button,
                     self.settings_button,
                     status_chip,
@@ -788,6 +805,24 @@ class WallpaperManagerUI:
             opacity=0,
             animate_opacity=m.PANEL,
         )
+        self.library_panel = LibraryPanel(
+            self.page,
+            self.service,
+            APP_NAMES,
+            active_app=lambda: self.active_app,
+            opacity_for=lambda app_id: self.drafts[app_id].opacity_ui,
+            on_back=self._show_main,
+            on_applied=self._on_gallery_applied,
+            on_toast=self._toast_from_settings,
+        )
+        self.library_view = ft.Container(
+            content=self.library_panel.control(),
+            padding=ft.Padding.symmetric(horizontal=36, vertical=28),
+            expand=True,
+            visible=False,
+            opacity=0,
+            animate_opacity=m.PANEL,
+        )
 
         self.aurora = aurora_band()
         self.orb_a = soft_orb(
@@ -820,6 +855,7 @@ class WallpaperManagerUI:
                     self.main_view,
                     self.settings_view,
                     self.gallery_view,
+                    self.library_view,
                     self.toast,
                 ],
                 expand=True,
@@ -837,6 +873,13 @@ class WallpaperManagerUI:
             self.gallery_button,
             page=self.page,
             on_click=self._show_gallery,
+            hover_scale=1.06,
+            press_scale=0.94,
+        )
+        m.wire_pressable(
+            self.library_button,
+            page=self.page,
+            on_click=self._show_library,
             hover_scale=1.06,
             press_scale=0.94,
         )
@@ -873,6 +916,7 @@ class WallpaperManagerUI:
             return
         self._showing_settings = True
         self._showing_gallery = False
+        self._showing_library = False
         self.settings_panel.reload()
         await self._swap_to_overlay(self.settings_view)
 
@@ -881,18 +925,27 @@ class WallpaperManagerUI:
             return
         self._showing_gallery = True
         self._showing_settings = False
+        self._showing_library = False
         await self._swap_to_overlay(self.gallery_view)
         await self.gallery_panel.reload()
+
+    async def _show_library(self, _event: ft.ControlEvent | None = None) -> None:
+        if self.library_panel is None:
+            return
+        self._showing_library = True
+        self._showing_settings = False
+        self._showing_gallery = False
+        self.library_panel.reload()
+        await self._swap_to_overlay(self.library_view)
 
     async def _swap_to_overlay(self, overlay: ft.Container) -> None:
         self.main_view.opacity = 0
         self.page.update()
         await asyncio.sleep(0.08)
         self.main_view.visible = False
-        self.settings_view.visible = False
-        self.gallery_view.visible = False
-        self.settings_view.opacity = 0
-        self.gallery_view.opacity = 0
+        for view in (self.settings_view, self.gallery_view, self.library_view):
+            view.visible = False
+            view.opacity = 0
         overlay.visible = True
         overlay.opacity = 0
         self.page.update()
@@ -903,12 +956,13 @@ class WallpaperManagerUI:
     async def _show_main(self, _event: ft.ControlEvent | None = None) -> None:
         self._showing_settings = False
         self._showing_gallery = False
-        self.settings_view.opacity = 0
-        self.gallery_view.opacity = 0
+        self._showing_library = False
+        for view in (self.settings_view, self.gallery_view, self.library_view):
+            view.opacity = 0
         self.page.update()
         await asyncio.sleep(0.08)
-        self.settings_view.visible = False
-        self.gallery_view.visible = False
+        for view in (self.settings_view, self.gallery_view, self.library_view):
+            view.visible = False
         self.main_view.visible = True
         self.main_view.opacity = 0
         self.page.update()

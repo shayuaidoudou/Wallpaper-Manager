@@ -174,6 +174,76 @@ def test_extension_tip_only_reports_missing_editor_extensions(tmp_path: Path):
     assert service.extension_tip(AppId.IDEA) is None
 
 
+def test_apply_records_history(tmp_path: Path):
+    store = StateStore(tmp_path / "config.json")
+    service = WallpaperService([FakeAdapter(AppId.VSCODE)], store=store)
+    image = make_image(tmp_path)
+
+    service.apply(AppId.VSCODE, str(image), 40)
+
+    history = service.history()
+    assert len(history) == 1
+    entry = history[0]
+    assert entry["image_path"] == str(image)
+    assert entry["source"] == "local"
+    assert entry["title"] == image.name
+    assert entry["app"] == "vscode"
+    assert entry["opacity_ui"] == 40
+    assert entry["applied_at"]
+
+
+def test_apply_with_history_entry_preserves_gallery_meta(tmp_path: Path):
+    store = StateStore(tmp_path / "config.json")
+    service = WallpaperService([FakeAdapter(AppId.VSCODE)], store=store)
+    image = make_image(tmp_path)
+    base = {
+        "source": "gallery",
+        "title": "星空",
+        "thumb": "https://cdn.example/thumb.webp",
+        "gallery": {"path": "/g/star.jpg"},
+    }
+
+    service.apply(AppId.VSCODE, str(image), 30, history_entry=base)
+    # Re-apply (e.g. from the library panel) must not create a duplicate.
+    service.apply(AppId.VSCODE, str(image), 55, history_entry=base)
+
+    history = service.history()
+    assert len(history) == 1
+    entry = history[0]
+    assert entry["source"] == "gallery"
+    assert entry["title"] == "星空"
+    assert entry["gallery"] == {"path": "/g/star.jpg"}
+    assert entry["opacity_ui"] == 55
+
+
+def test_apply_failure_records_no_history(tmp_path: Path):
+    fake = FakeAdapter(AppId.VSCODE)
+    fake.fail_apply = RuntimeError("boom")
+    service = WallpaperService([fake], store=StateStore(tmp_path / "config.json"))
+
+    service.apply(AppId.VSCODE, str(make_image(tmp_path)), 40)
+
+    assert service.history() == []
+
+
+def test_toggle_favorite_via_service(tmp_path: Path):
+    service = WallpaperService(
+        [FakeAdapter(AppId.VSCODE)], store=StateStore(tmp_path / "config.json")
+    )
+    entry = {
+        "source": "gallery",
+        "title": "星空",
+        "image_path": None,
+        "thumb": "https://cdn.example/thumb.webp",
+        "gallery": {"path": "/g/star.jpg"},
+    }
+
+    assert service.toggle_favorite(entry) is True
+    assert service.favorite_keys() == {"g:/g/star.jpg"}
+    assert service.toggle_favorite(entry) is False
+    assert service.favorites() == []
+
+
 def test_build_default_service_wires_all_real_adapters():
     service = build_default_service()
 
