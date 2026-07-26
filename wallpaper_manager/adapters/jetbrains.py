@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from xml.dom import Node, minidom
 
-from wallpaper_manager.core.models import AppId
+from wallpaper_manager.core.models import AppId, JETBRAINS_PRODUCT_PREFIXES
 from wallpaper_manager.core.opacity import clamp_ui
 from wallpaper_manager.detect.paths import find_jetbrains_other_xml
 
@@ -54,11 +54,10 @@ class JetBrainsAdapter:
 
     @staticmethod
     def _default_prefix(app_id: AppId) -> str:
-        if app_id is AppId.IDEA:
-            return "IntelliJIdea"
-        if app_id is AppId.PYCHARM:
-            return "PyCharm"
-        raise ValueError(f"Unsupported JetBrains app: {app_id}")
+        prefix = JETBRAINS_PRODUCT_PREFIXES.get(app_id)
+        if prefix is None:
+            raise ValueError(f"Unsupported JetBrains app: {app_id}")
+        return prefix
 
     def detect(self) -> bool:
         if self.other_xml is None:

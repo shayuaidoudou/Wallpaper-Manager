@@ -7,13 +7,14 @@ from pathlib import Path
 from wallpaper_manager.adapters.base import WallpaperAdapter
 from wallpaper_manager.adapters.cursor import CursorAdapter
 from wallpaper_manager.adapters.ghostty import GhosttyAdapter
-from wallpaper_manager.adapters.jetbrains import IdeaAdapter, PyCharmAdapter
+from wallpaper_manager.adapters.jetbrains import JetBrainsAdapter
 from wallpaper_manager.adapters.vscode import VsCodeAdapter
 from wallpaper_manager.core.config_backup import ConfigBackupStore
 from wallpaper_manager.core.image_service import validate_image_path
 from wallpaper_manager.core.models import (
     AppDiagnostic,
     AppId,
+    JETBRAINS_APP_IDS,
     PrecheckResult,
     WallpaperState,
 )
@@ -485,8 +486,7 @@ def build_default_service() -> WallpaperService:
         [
             VsCodeAdapter(),
             CursorAdapter(),
-            IdeaAdapter(),
-            PyCharmAdapter(),
+            *(JetBrainsAdapter(app_id) for app_id in JETBRAINS_APP_IDS),
             GhosttyAdapter(),
         ]
     )

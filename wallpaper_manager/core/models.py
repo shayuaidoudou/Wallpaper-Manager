@@ -9,7 +9,27 @@ class AppId(str, Enum):
     CURSOR = "cursor"
     IDEA = "idea"
     PYCHARM = "pycharm"
+    WEBSTORM = "webstorm"
+    PHPSTORM = "phpstorm"
+    GOLAND = "goland"
+    CLION = "clion"
+    RIDER = "rider"
+    DATAGRIP = "datagrip"
     GHOSTTY = "ghostty"
+
+
+# JetBrains 全家桶共用同一套 other.xml 机制，仅产品目录前缀不同。
+JETBRAINS_PRODUCT_PREFIXES: dict[AppId, str] = {
+    AppId.IDEA: "IntelliJIdea",
+    AppId.PYCHARM: "PyCharm",
+    AppId.WEBSTORM: "WebStorm",
+    AppId.PHPSTORM: "PhpStorm",
+    AppId.GOLAND: "GoLand",
+    AppId.CLION: "CLion",
+    AppId.RIDER: "Rider",
+    AppId.DATAGRIP: "DataGrip",
+}
+JETBRAINS_APP_IDS: tuple[AppId, ...] = tuple(JETBRAINS_PRODUCT_PREFIXES)
 
 
 @dataclass

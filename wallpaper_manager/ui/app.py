@@ -59,6 +59,12 @@ APP_NAMES = {
     AppId.CURSOR: "Cursor",
     AppId.IDEA: "IDEA",
     AppId.PYCHARM: "PyCharm",
+    AppId.WEBSTORM: "WebStorm",
+    AppId.PHPSTORM: "PhpStorm",
+    AppId.GOLAND: "GoLand",
+    AppId.CLION: "CLion",
+    AppId.RIDER: "Rider",
+    AppId.DATAGRIP: "DataGrip",
     AppId.GHOSTTY: "Ghostty",
 }
 APP_ORDER = list(AppId)
@@ -622,9 +628,8 @@ class WallpaperManagerUI:
         )
         tab = ft.Container(
             content=body,
-            padding=ft.Padding.symmetric(horizontal=10, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
             border_radius=12,
-            expand=True,
             alignment=ft.Alignment.CENTER,
             bgcolor=opa(0.18, "#ffffff") if selected else "#00000000",
             border=ft.Border.all(1, HAIRLINE_STRONG if selected else "#00000000"),
@@ -819,6 +824,7 @@ class WallpaperManagerUI:
             content=ft.Row(
                 [self._make_tab(app_id) for app_id in APP_ORDER],
                 spacing=4,
+                scroll=ft.ScrollMode.AUTO,
             ),
             padding=5,
             border_radius=16,

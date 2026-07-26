@@ -5,7 +5,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from wallpaper_manager.core.models import AppId
+from wallpaper_manager.core.models import (
+    AppId,
+    JETBRAINS_APP_IDS,
+    JETBRAINS_PRODUCT_PREFIXES,
+)
 from wallpaper_manager.detect.paths import (
     cursor_settings_path,
     find_ghostty_config,
@@ -71,6 +75,25 @@ _INSTALL_DIR_TOKENS = {
     AppId.GHOSTTY: ("ghostty",),
 }
 
+# JetBrains 全家桶：按产品前缀批量补齐标签、目录提示与安装目录识别。
+CONFIG_FILE_LABELS.update(
+    {app_id: "other.xml" for app_id in JETBRAINS_APP_IDS}
+)
+for _jb, _prefix in JETBRAINS_PRODUCT_PREFIXES.items():
+    _DIR_HINTS_DARWIN.setdefault(
+        _jb, f"~/Library/Application Support/JetBrains/{_prefix}* 版本目录"
+    )
+    _DIR_HINTS_WIN32.setdefault(_jb, rf"%APPDATA%\JetBrains\{_prefix}* 版本目录")
+    _PATH_HINTS_DARWIN.setdefault(
+        _jb, f"~/Library/Application Support/JetBrains/{_prefix}*/options/other.xml"
+    )
+    _PATH_HINTS_WIN32.setdefault(
+        _jb, rf"%APPDATA%\JetBrains\{_prefix}*\options\other.xml"
+    )
+    _lower = _prefix.lower()
+    _INSTALL_NAME_HINTS.setdefault(_jb, (f"{_lower}.app", f"{_lower}64.exe"))
+    _INSTALL_DIR_TOKENS.setdefault(_jb, (_lower,))
+
 
 def config_dir_hint(app_id: AppId) -> str:
     """OS-specific folder users should pick in Settings."""
@@ -103,10 +126,9 @@ def auto_config_path(app_id: AppId) -> Path | None:
         return vscode_settings_path()
     if app_id is AppId.CURSOR:
         return cursor_settings_path()
-    if app_id is AppId.IDEA:
-        return find_jetbrains_other_xml("IntelliJIdea")
-    if app_id is AppId.PYCHARM:
-        return find_jetbrains_other_xml("PyCharm")
+    prefix = JETBRAINS_PRODUCT_PREFIXES.get(app_id)
+    if prefix is not None:
+        return find_jetbrains_other_xml(prefix)
     if app_id is AppId.GHOSTTY:
         return find_ghostty_config()
     return None
@@ -172,8 +194,8 @@ def _candidate_files(app_id: AppId, root: Path) -> list[Path]:
         return _settings_json_candidates(root)
     if app_id is AppId.IDEA:
         return _jetbrains_candidates(root, ("IntelliJIdea", "IdeaIC"))
-    if app_id is AppId.PYCHARM:
-        return _jetbrains_candidates(root, ("PyCharm",))
+    if app_id in JETBRAINS_PRODUCT_PREFIXES:
+        return _jetbrains_candidates(root, (JETBRAINS_PRODUCT_PREFIXES[app_id],))
     if app_id is AppId.GHOSTTY:
         return _ghostty_candidates(root)
     return []
@@ -186,7 +208,7 @@ def _is_plausible_target(app_id: AppId, candidate: Path) -> bool:
         return False
     if app_id in (AppId.VSCODE, AppId.CURSOR):
         return candidate.name == "settings.json" and parent.name == "User"
-    if app_id in (AppId.IDEA, AppId.PYCHARM):
+    if app_id in JETBRAINS_PRODUCT_PREFIXES:
         return candidate.name == "other.xml" and parent.name == "options"
     if app_id is AppId.GHOSTTY:
         return candidate.name in {"config", "config.ghostty"}

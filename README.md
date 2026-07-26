@@ -1,14 +1,21 @@
 # Wallpaper Manager
 
+[![CI](https://github.com/shayuaidoudou/Wallpaper-Manager/actions/workflows/ci.yml/badge.svg)](https://github.com/shayuaidoudou/Wallpaper-Manager/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#支持的应用)
 
 **统一管理多个 IDE / 终端背景的本地小工具。**
 
-在一个界面里，为 VS Code、Cursor、IntelliJ IDEA、PyCharm、Ghostty 分别选图、调透明度并一键写入各自配置——不用再翻各个应用的设置文件。
+在一个界面里，为 VS Code、Cursor、JetBrains 全家桶（IDEA / PyCharm / WebStorm / PhpStorm / GoLand / CLion / Rider / DataGrip）与 Ghostty 分别选图、调透明度并一键写入各自配置——不用再翻各个应用的设置文件。
 
 > Author: [shayuaidoudou](https://github.com/shayuaidoudou) · 个人小站：[鲨鱼爱兜兜的小站](https://blog.shayuaidoudou.store/)
+
+## 界面预览
+
+![主界面 — 双栏布局、实时预览与编辑器模拟层](docs/screenshots/main.png)
+
+![Ghostty — 终端模拟预览](docs/screenshots/ghostty.png)
 
 ## 下载体验（macOS）
 
@@ -40,7 +47,7 @@ Wallpaper Manager 把这些收成一套：**选应用 → 选图 → 调透明�
 
 ## 功能一览
 
-- **多应用统一入口**：编辑器 + Ghostty 在同一窗口切换管理
+- **多应用统一入口**：11 款编辑器 / 终端在同一窗口切换管理
 - **按应用独立配置**：图片与透明度互不覆盖
 - **在线图库**：浏览分类缩略图，一键下载并设为当前 IDE 壁纸
 - **收藏与历史**：应用记录自动留存，图库可收藏，一键回切
@@ -60,6 +67,12 @@ Wallpaper Manager 把这些收成一套：**选应用 → 选图 → 调透明�
 | Cursor | `settings.json` + CSS 同步 | ✓ | ✓ |
 | IntelliJ IDEA | `options/other.xml` | ✓ | ✓ |
 | PyCharm | `options/other.xml` | ✓ | ✓ |
+| WebStorm | `options/other.xml` | ✓ | ✓ |
+| PhpStorm | `options/other.xml` | ✓ | ✓ |
+| GoLand | `options/other.xml` | ✓ | ✓ |
+| CLion | `options/other.xml` | ✓ | ✓ |
+| Rider | `options/other.xml` | ✓ | ✓ |
+| DataGrip | `options/other.xml` | ✓ | ✓ |
 | Ghostty | `config` / `config.ghostty` | ✓ | ✓ |
 
 ## 快速开始
@@ -102,6 +115,7 @@ python -m wallpaper_manager
 | Cursor | `~/Library/Application Support/Cursor` |
 | IDEA | `~/Library/Application Support/JetBrains/IntelliJIdea*` |
 | PyCharm | `~/Library/Application Support/JetBrains/PyCharm*` |
+| 其他 JetBrains IDE | `~/Library/Application Support/JetBrains/<产品名>*` |
 | Ghostty | `~/Library/Application Support/com.mitchellh.ghostty` |
 
 请选 **数据目录**（Application Support），不要选 `.app` 安装包本身。选好后程序会自动找到配置文件。

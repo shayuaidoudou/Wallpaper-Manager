@@ -37,6 +37,8 @@ def test_success_message_has_target_specific_reload_hint():
     assert "Ghostty" in apply_success_message(AppId.GHOSTTY)
     assert APP_NAMES[AppId.PYCHARM] == "PyCharm"
     assert APP_NAMES[AppId.GHOSTTY] == "Ghostty"
+    assert APP_NAMES[AppId.WEBSTORM] == "WebStorm"
+    assert set(APP_NAMES) == set(AppId)
 
 
 def test_normalize_image_path_returns_resolved_absolute_path(tmp_path, monkeypatch):
