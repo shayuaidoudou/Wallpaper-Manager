@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-当前维护 `0.3.x` 发布线。
+当前维护 `0.4.x` 发布线。
 
 ## Reporting a vulnerability
 

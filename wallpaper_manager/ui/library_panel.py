@@ -19,12 +19,13 @@ from wallpaper_manager.gallery.nuanxin_client import (
 from wallpaper_manager.ui import motion as m
 from wallpaper_manager.ui.theme import (
     ACCENT,
-    ACCENT_2,
     ERROR,
     HAIRLINE,
     MUTED,
     SUCCESS,
     TEXT,
+    accent_button,
+    back_button,
     opa,
     shell,
 )
@@ -97,21 +98,7 @@ class LibraryPanel:
             self._client = None
 
     def _build(self) -> ft.Control:
-        back = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.ARROW_BACK_ROUNDED, size=16, color=ACCENT_2),
-                    ft.Text("返回", color=ACCENT_2, weight=ft.FontWeight.W_700),
-                ],
-                spacing=6,
-                tight=True,
-            ),
-            padding=ft.Padding.symmetric(horizontal=14, vertical=10),
-            border_radius=999,
-            border=ft.Border.all(1, ACCENT),
-            bgcolor=opa(0.12, ACCENT),
-            ink=False,
-        )
+        back = back_button()
         m.wire_pressable(
             back,
             page=self.page,
@@ -235,14 +222,8 @@ class LibraryPanel:
             hover_scale=1.08,
             press_scale=0.92,
         )
-        apply_btn = ft.Container(
-            content=ft.Text("应用", size=12, weight=ft.FontWeight.W_700, color=TEXT),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
-            border_radius=12,
-            bgcolor=opa(0.28, ACCENT),
-            border=ft.Border.all(1, ACCENT),
-            alignment=ft.Alignment.CENTER,
-            ink=False,
+        apply_btn = accent_button(
+            "应用", strong=True, size=12, padding_h=10, padding_v=8, radius=12
         )
         m.wire_pressable(
             apply_btn,

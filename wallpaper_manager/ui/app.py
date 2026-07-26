@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 import time
@@ -36,18 +37,20 @@ from wallpaper_manager.ui.theme import (
     SURFACE,
     TEXT,
     TRACK,
+    accent_button,
     accent_gradient,
     ambient_phase,
     aurora_band,
     frame_aura,
+    ghost_button,
     glass_chip,
     glow,
     micro_label,
     opa,
+    opacity_scale_strip,
     page_gradient,
     shell,
     soft_orb,
-    spark,
     title_shader,
 )
 
@@ -112,6 +115,7 @@ class WallpaperManagerUI:
         self._pending_preview_src: str | None = None
         self._preview_build_token = 0
         self._ambient_paused = False
+        self._window_focused = True
         self._last_opacity_label = -1
         self._last_opacity_chip = -1
         self._last_opacity_preview = -1
@@ -135,6 +139,10 @@ class WallpaperManagerUI:
             src="",
             fit=ft.BoxFit.COVER,
             expand=True,
+            left=0,
+            right=0,
+            top=0,
+            bottom=0,
             visible=False,
             fade_in_animation=0,
             opacity=1,
@@ -204,6 +212,8 @@ class WallpaperManagerUI:
             ),
             ignore_interactions=True,
         )
+        self.editor_mock = self._build_editor_mock()
+        self.terminal_mock = self._build_terminal_mock()
         self.preview_badge = ft.Container(
             content=ft.Row(
                 [
@@ -215,11 +225,11 @@ class WallpaperManagerUI:
                         shadow=glow(0.35),
                     ),
                     ft.Text(
-                        "LIVE PREVIEW",
-                        size=10,
+                        "实时预览",
+                        size=11,
                         weight=ft.FontWeight.W_700,
                         color=TEXT,
-                        style=ft.TextStyle(letter_spacing=1.2),
+                        style=ft.TextStyle(letter_spacing=2),
                     ),
                 ],
                 spacing=8,
@@ -232,9 +242,11 @@ class WallpaperManagerUI:
             border=ft.Border.all(1, HAIRLINE),
             left=14,
             top=14,
+            opacity=0,
+            animate_opacity=m.SNAP,
         )
         self.opacity_chip = ft.Container(
-            content=ft.Text("Opacity 25%", size=11, weight=ft.FontWeight.W_600, color=TEXT),
+            content=ft.Text("不透明度 25%", size=11, weight=ft.FontWeight.W_600, color=TEXT),
             padding=ft.Padding.symmetric(horizontal=12, vertical=7),
             border_radius=RADIUS_PILL,
             bgcolor=opa(0.72, "#0d0a16"),
@@ -254,6 +266,8 @@ class WallpaperManagerUI:
             border=ft.Border.all(1, opa(0.4, ACCENT)),
             right=14,
             top=14,
+            opacity=0,
+            animate_opacity=m.SNAP,
         )
         self.ring_glow = ft.Container(
             expand=True,
@@ -268,7 +282,7 @@ class WallpaperManagerUI:
             prefix_icon=ft.Icons.LINK_ROUNDED,
             color=TEXT,
             label_style=ft.TextStyle(color=MUTED, size=11),
-            hint_style=ft.TextStyle(color=opa(0.55, MUTED), size=13),
+            hint_style=ft.TextStyle(color=opa(0.8, MUTED), size=13),
             bgcolor=TRACK,
             border_color=PANEL_BORDER,
             focused_border_color=ACCENT,
@@ -305,18 +319,28 @@ class WallpaperManagerUI:
             alignment=ft.Alignment.CENTER,
         )
         self.opacity_slider_well = ft.Container(
-            content=ft.Row(
+            content=ft.Column(
                 [
-                    ft.Container(
-                        content=self.opacity_slider,
-                        expand=True,
-                        padding=ft.Padding.only(left=4, right=8, top=2, bottom=2),
-                        alignment=ft.Alignment.CENTER_LEFT,
+                    ft.Row(
+                        [
+                            ft.Container(
+                                content=self.opacity_slider,
+                                expand=True,
+                                padding=ft.Padding.only(left=4, right=8, top=2, bottom=2),
+                                alignment=ft.Alignment.CENTER_LEFT,
+                            ),
+                            self.opacity_value_chip,
+                        ],
+                        spacing=10,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    self.opacity_value_chip,
+                    ft.Container(
+                        content=opacity_scale_strip(),
+                        padding=ft.Padding.only(left=4, right=4),
+                    ),
                 ],
-                spacing=10,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=8,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
             padding=ft.Padding.symmetric(horizontal=14, vertical=12),
             border_radius=16,
@@ -331,17 +355,9 @@ class WallpaperManagerUI:
                 )
             ],
         )
-        self.clear_button = ft.Container(
-            content=ft.Text("清除", color=MUTED, weight=ft.FontWeight.W_600, size=13),
-            padding=ft.Padding.symmetric(horizontal=20, vertical=12),
-            border_radius=RADIUS_PILL,
-            border=ft.Border.all(1, HAIRLINE),
-            bgcolor=opa(0.35, "#120e1c"),
-            animate_opacity=m.SNAP,
-            animate_scale=m.HOVER,
-            scale=1,
-            ink=False,
-        )
+        self.clear_button = ghost_button("清除", padding_h=20, radius=RADIUS_PILL)
+        self.clear_button.animate_opacity = m.SNAP
+        self.clear_button.animate_scale = m.HOVER
         self.apply_icon_wrap = ft.Container(
             content=ft.Icon(ft.Icons.ARROW_FORWARD_ROUNDED, size=15, color=BG),
             width=28,
@@ -372,29 +388,39 @@ class WallpaperManagerUI:
             ink=False,
         )
         self.apply_icon = self.apply_icon_wrap.content
-        self.sync_others = ft.Checkbox(
-            label="同步到其他已安装应用",
+        self.sync_others = ft.CupertinoSwitch(
             value=False,
-            fill_color=ACCENT,
-            check_color=BG,
-            label_style=ft.TextStyle(color=MUTED, size=12),
+            active_track_color=ACCENT,
+            inactive_track_color=opa(0.6, "#241b3a"),
+            thumb_color="#ffffff",
         )
-        self.browse_button = ft.Container(
-            content=ft.Text("浏览", color=ACCENT_2, weight=ft.FontWeight.W_700, size=13),
-            padding=ft.Padding.symmetric(horizontal=16, vertical=14),
-            border_radius=RADIUS_CTRL,
-            border=ft.Border.all(1, opa(0.55, ACCENT)),
-            bgcolor=opa(0.1, ACCENT),
-            animate_scale=m.HOVER,
-            scale=1,
-            ink=False,
+        self.sync_row = ft.Row(
+            [
+                self.sync_others,
+                ft.Container(
+                    content=ft.Text("同步到其他已安装应用", size=12, color=MUTED),
+                    on_click=self._toggle_sync,
+                    ink=False,
+                ),
+            ],
+            spacing=10,
+            tight=True,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
+        self.browse_button = accent_button("浏览", padding_v=14)
         self.status_dot = ft.Container(
             width=8,
             height=8,
             border_radius=8,
-            bgcolor=ACCENT_2,
-            shadow=glow(0.5),
+            bgcolor=SUCCESS,
+            shadow=[
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=12,
+                    color=opa(0.5, SUCCESS),
+                    offset=ft.Offset(0, 0),
+                )
+            ],
             animate_opacity=m.SOFT,
             opacity=1,
         )
@@ -430,13 +456,117 @@ class WallpaperManagerUI:
         self.root_shell: ft.Container
         self.orb_a: ft.Container
         self.orb_b: ft.Container
-        self.orb_c: ft.Container
         self.aurora: ft.Container
-        self.sparks: list[ft.Container] = []
         self.preview_aura: ft.Container
         self._ambient_t = 0.0
         self.file_picker = ft.FilePicker()
         self.page.services.append(self.file_picker)
+
+    def _mock_line(self, *spans: tuple[str, str, float]) -> ft.Text:
+        return ft.Text(
+            spans=[
+                ft.TextSpan(
+                    text,
+                    style=ft.TextStyle(
+                        color=opa(alpha, color),
+                        font_family="Menlo",
+                        size=12,
+                    ),
+                )
+                for text, color, alpha in spans
+            ],
+        )
+
+    def _build_editor_mock(self) -> ft.Container:
+        """低透明度的假代码层：所见即所得地展示壁纸垫在编辑器后的效果。"""
+        gutter = ft.Column(
+            [
+                ft.Text(
+                    str(i),
+                    size=12,
+                    color=opa(0.4, MUTED),
+                    font_family="Menlo",
+                )
+                for i in range(1, 9)
+            ],
+            spacing=6,
+            horizontal_alignment=ft.CrossAxisAlignment.END,
+        )
+        code = ft.Column(
+            [
+                self._mock_line(("# 壁纸垫在代码后的实际效果", MUTED, 0.8)),
+                self._mock_line(
+                    ("import ", ACCENT_2, 0.95),
+                    ("flet ", TEXT, 0.92),
+                    ("as ", ACCENT_2, 0.95),
+                    ("ft", TEXT, 0.92),
+                ),
+                self._mock_line(("", TEXT, 0.0)),
+                self._mock_line(
+                    ("def ", ACCENT_2, 0.95),
+                    ("apply_wallpaper", ACCENT, 0.95),
+                    ("(path: ", TEXT, 0.92),
+                    ("str", ACCENT_2, 0.95),
+                    (") -> ", TEXT, 0.92),
+                    ("None", ACCENT_2, 0.95),
+                    (":", TEXT, 0.92),
+                ),
+                self._mock_line(
+                    ("    opacity = ", TEXT, 0.92),
+                    ("0.34", SUCCESS, 0.95),
+                ),
+                self._mock_line(("    config.write(path, opacity)", TEXT, 0.92)),
+                self._mock_line(("    reload_window()", TEXT, 0.92)),
+                self._mock_line(("", TEXT, 0.0)),
+            ],
+            spacing=6,
+        )
+        return ft.Container(
+            content=ft.Row(
+                [gutter, code],
+                spacing=14,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+            ),
+            padding=ft.Padding.only(left=22, top=48, right=18),
+            alignment=ft.Alignment.TOP_LEFT,
+            visible=False,
+            ignore_interactions=True,
+        )
+
+    def _build_terminal_mock(self) -> ft.Container:
+        """Ghostty 专用：终端提示符模拟层。"""
+        lines = ft.Column(
+            [
+                self._mock_line(
+                    ("~ ", MUTED, 0.85),
+                    ("❯ ", SUCCESS, 0.95),
+                    ("ghostty --config", TEXT, 0.92),
+                ),
+                self._mock_line(
+                    ("background-opacity = ", MUTED, 0.85),
+                    ("0.34", SUCCESS, 0.95),
+                ),
+                self._mock_line(("# 壁纸垫在终端后的实际效果", MUTED, 0.75)),
+                self._mock_line(
+                    ("~ ", MUTED, 0.85),
+                    ("❯ ", SUCCESS, 0.95),
+                    ("█", ACCENT_2, 0.85),
+                ),
+            ],
+            spacing=8,
+        )
+        return ft.Container(
+            content=lines,
+            padding=ft.Padding.only(left=22, top=48),
+            alignment=ft.Alignment.TOP_LEFT,
+            visible=False,
+            ignore_interactions=True,
+        )
+
+    def _sync_preview_mock(self, has_image: bool) -> None:
+        is_terminal = self.active_app is AppId.GHOSTTY
+        self.editor_mock.visible = has_image and not is_terminal
+        self.terminal_mock.visible = has_image and is_terminal
 
     @staticmethod
     def _draft_from_state(state: object) -> Draft:
@@ -471,13 +601,13 @@ class WallpaperManagerUI:
                             width=5,
                             height=5,
                             border_radius=5,
-                            bgcolor=ACCENT_2 if draft.installed else ERROR,
+                            bgcolor=SUCCESS if draft.installed else ERROR,
                         ),
                         ft.Text(
                             status,
-                            size=9,
+                            size=10,
                             weight=ft.FontWeight.W_600,
-                            color=ACCENT_2 if draft.installed else ERROR,
+                            color=SUCCESS if draft.installed else ERROR,
                         ),
                     ],
                     spacing=5,
@@ -542,8 +672,8 @@ class WallpaperManagerUI:
             assert isinstance(dot, ft.Container)
             assert isinstance(status, ft.Text)
             status.value = "已连接" if draft.installed else "未安装"
-            status.color = ACCENT_2 if draft.installed else ERROR
-            dot.bgcolor = ACCENT_2 if draft.installed else ERROR
+            status.color = SUCCESS if draft.installed else ERROR
+            dot.bgcolor = SUCCESS if draft.installed else ERROR
 
     async def _select_tab(self, app_id: AppId) -> None:
         if app_id == self.active_app or self._tab_busy:
@@ -707,6 +837,8 @@ class WallpaperManagerUI:
                     self.preview_placeholder,
                     self.preview_image,
                     self.preview_veil,
+                    self.editor_mock,
+                    self.terminal_mock,
                     self.preview_edge,
                     self.preview_badge,
                     self.preview_app_chip,
@@ -715,9 +847,10 @@ class WallpaperManagerUI:
                 ],
                 fit=ft.StackFit.EXPAND,
             ),
-            height=300,
+            height=380,
             border_radius=18,
             clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            on_hover=self._on_preview_hover,
         )
         self.preview_shell = shell(preview_inner, padding=6, radius=24)
         self.preview_shell.scale = 1
@@ -743,17 +876,17 @@ class WallpaperManagerUI:
 
         controls = ft.Column(
             [
-                micro_label("Image Source"),
+                micro_label("图片来源"),
                 ft.Row([self.path_field, self.browse_button], spacing=SPACE_SM),
                 ft.Container(height=SPACE_SM),
-                micro_label("Opacity"),
+                micro_label("不透明度"),
                 self.opacity_slider_well,
                 ft.Text(
                     "0% 完全透明 · 100% 完全不透明 · 编辑器主题底色会透出",
-                    size=11,
+                    size=12,
                     color=MUTED,
                 ),
-                self.sync_others,
+                self.sync_row,
                 ft.Container(height=SPACE_SM),
                 action_bar,
             ],
@@ -761,7 +894,22 @@ class WallpaperManagerUI:
         )
 
         panel_body = ft.Container(
-            content=ft.Column([self.preview_frame, controls], spacing=SPACE_MD),
+            content=ft.ResponsiveRow(
+                [
+                    ft.Container(
+                        content=self.preview_frame,
+                        col={"sm": 12, "lg": 7},
+                    ),
+                    ft.Container(
+                        content=controls,
+                        col={"sm": 12, "lg": 5},
+                        padding=ft.Padding.only(top=2),
+                    ),
+                ],
+                columns=12,
+                spacing=SPACE_MD,
+                run_spacing=SPACE_MD,
+            ),
             padding=SPACE_MD,
         )
         self.main_panel = ft.Container(
@@ -772,13 +920,31 @@ class WallpaperManagerUI:
             animate_offset=m.ENTRANCE,
         )
 
+        header_top: ft.Control = self.header_block
+        top_drag: ft.Control | None = None
+        if sys.platform == "darwin":
+            # 标题栏隐藏后，头部区域兼作窗口拖拽区。
+            header_top = ft.WindowDragArea(self.header_block)
+            # 原系统标题栏位置的整条顶带：可拖动，双击最大化/还原（肌肉记忆兼容）。
+            top_drag = ft.WindowDragArea(
+                ft.Container(height=44, bgcolor="#00000000"),
+                left=0,
+                right=0,
+                top=0,
+            )
+
         self.main_view = ft.Container(
             content=ft.Column(
-                [self.header_block, self.tabs_block, self.main_panel],
+                [header_top, self.tabs_block, self.main_panel],
                 spacing=18,
                 scroll=ft.ScrollMode.AUTO,
             ),
-            padding=ft.Padding.symmetric(horizontal=32, vertical=26),
+            padding=ft.Padding.only(
+                left=32,
+                right=32,
+                top=44 if sys.platform == "darwin" else 26,
+                bottom=26,
+            ),
             expand=True,
             visible=True,
             opacity=1,
@@ -796,7 +962,12 @@ class WallpaperManagerUI:
         )
         self.settings_view = ft.Container(
             content=self.settings_panel.control(),
-            padding=ft.Padding.symmetric(horizontal=36, vertical=28),
+            padding=ft.Padding.only(
+                left=36,
+                right=36,
+                top=44 if sys.platform == "darwin" else 28,
+                bottom=28,
+            ),
             expand=True,
             visible=False,
             opacity=0,
@@ -814,7 +985,12 @@ class WallpaperManagerUI:
         )
         self.gallery_view = ft.Container(
             content=self.gallery_panel.control(),
-            padding=ft.Padding.symmetric(horizontal=36, vertical=28),
+            padding=ft.Padding.only(
+                left=36,
+                right=36,
+                top=44 if sys.platform == "darwin" else 28,
+                bottom=28,
+            ),
             expand=True,
             visible=False,
             opacity=0,
@@ -832,7 +1008,12 @@ class WallpaperManagerUI:
         )
         self.library_view = ft.Container(
             content=self.library_panel.control(),
-            padding=ft.Padding.symmetric(horizontal=36, vertical=28),
+            padding=ft.Padding.only(
+                left=36,
+                right=36,
+                top=44 if sys.platform == "darwin" else 28,
+                bottom=28,
+            ),
             expand=True,
             visible=False,
             opacity=0,
@@ -841,21 +1022,11 @@ class WallpaperManagerUI:
 
         self.aurora = aurora_band()
         self.orb_a = soft_orb(
-            420, "#a855f7", 0.26, breathe_ms=5600, top=-160, right=-100
+            420, "#a855f7", 0.22, breathe_ms=5600, top=-160, right=-100
         )
         self.orb_b = soft_orb(
-            320, "#e879f9", 0.16, breathe_ms=6400, bottom=-140, left=-110
+            320, "#e879f9", 0.14, breathe_ms=6400, bottom=-140, left=-110
         )
-        self.orb_c = soft_orb(
-            240, "#7c3aed", 0.14, breathe_ms=7200, top=240, left=400
-        )
-        self.sparks = [
-            spark(3, top=100, left=200),
-            spark(4, color="#ffffff", top=160, right=160),
-            spark(3, bottom=180, left=280),
-            spark(3, top=320, right=240),
-            spark(4, color=ACCENT_2, bottom=120, right=320),
-        ]
 
         self.root_shell = ft.Container(
             expand=True,
@@ -865,12 +1036,11 @@ class WallpaperManagerUI:
                     self.aurora,
                     self.orb_a,
                     self.orb_b,
-                    self.orb_c,
-                    *self.sparks,
                     self.main_view,
                     self.settings_view,
                     self.gallery_view,
                     self.library_view,
+                    *([top_drag] if top_drag is not None else []),
                     self.toast,
                 ],
                 expand=True,
@@ -1052,7 +1222,12 @@ class WallpaperManagerUI:
 
     async def _ambient_loop(self) -> None:
         while self._motion_running:
-            if self._ambient_paused or self._opacity_drag or self._showing_gallery:
+            if (
+                not self._window_focused
+                or self._ambient_paused
+                or self._opacity_drag
+                or self._showing_gallery
+            ):
                 await asyncio.sleep(0.35)
                 continue
 
@@ -1060,34 +1235,39 @@ class WallpaperManagerUI:
             t = self._ambient_t
             a = ambient_phase(t)
             b = ambient_phase(t + 1.3)
-            c = ambient_phase(t + 2.1)
 
-            self.orb_a.opacity = 0.55 + 0.3 * a
-            self.orb_a.scale = 0.96 + 0.08 * a
+            self.orb_a.opacity = 0.62 + 0.16 * a
+            self.orb_a.scale = 0.98 + 0.04 * a
             self.orb_a.rotate = ft.Rotate(t * 0.1, alignment=ft.Alignment.CENTER)
 
-            self.orb_b.opacity = 0.4 + 0.28 * b
-            self.orb_b.scale = 0.95 + 0.1 * b
+            self.orb_b.opacity = 0.5 + 0.14 * b
+            self.orb_b.scale = 0.98 + 0.05 * b
             self.orb_b.rotate = ft.Rotate(-t * 0.08, alignment=ft.Alignment.CENTER)
 
-            self.orb_c.opacity = 0.35 + 0.28 * c
-            self.orb_c.scale = 0.96 + 0.08 * c
-            self.orb_c.rotate = ft.Rotate(t * 0.12, alignment=ft.Alignment.CENTER)
-
-            self.aurora.opacity = 0.5 + 0.25 * ambient_phase(t * 0.55)
-            self.status_dot.opacity = 0.45 + 0.55 * ambient_phase(t * 1.1)
-            self.preview_aura.opacity = 0.35 + 0.28 * ambient_phase(t * 0.85)
-            self.preview_aura.scale = 0.992 + 0.014 * ambient_phase(t * 0.85)
-            self.preview_edge.opacity = 0.4 + 0.3 * ambient_phase(t * 0.7)
-            self.apply_button.shadow = glow(0.22 + 0.18 * ambient_phase(t * 0.9))
-
-            for i, s in enumerate(self.sparks):
-                twinkle = ambient_phase(t * 1.6 + i * 0.9)
-                s.opacity = 0.2 + 0.55 * twinkle
-                s.scale = 0.7 + 0.45 * twinkle
+            self.aurora.opacity = 0.55 + 0.15 * ambient_phase(t * 0.55)
+            self.status_dot.opacity = 0.65 + 0.35 * ambient_phase(t * 1.1)
+            self.preview_aura.opacity = 0.32 + 0.18 * ambient_phase(t * 0.85)
+            self.preview_aura.scale = 0.996 + 0.008 * ambient_phase(t * 0.85)
+            self.preview_edge.opacity = 0.45 + 0.18 * ambient_phase(t * 0.7)
 
             self.page.update()
-            await asyncio.sleep(2.2)
+            await asyncio.sleep(2.6)
+
+    def _toggle_sync(self, _event: ft.ControlEvent) -> None:
+        self.sync_others.value = not bool(self.sync_others.value)
+        self.page.update()
+
+    def _on_preview_hover(self, event: ft.ControlEvent) -> None:
+        show = str(event.data).lower() == "true"
+        self.preview_badge.opacity = 1 if show else 0
+        self.preview_app_chip.opacity = 1 if show else 0
+        self.page.update()
+
+    def _on_window_event(self, event: ft.WindowEvent) -> None:
+        if event.type == ft.WindowEventType.BLUR:
+            self._window_focused = False
+        elif event.type in (ft.WindowEventType.FOCUS, ft.WindowEventType.RESTORE):
+            self._window_focused = True
 
     def _on_path_change(self, event: ft.Event[ft.TextField]) -> None:
         path = event.control.value.strip()
@@ -1115,7 +1295,7 @@ class WallpaperManagerUI:
             self._set_opacity_label(value)
             chip = self.opacity_chip.content
             assert isinstance(chip, ft.Text)
-            chip.value = f"Opacity {value}%"
+            chip.value = f"不透明度 {value}%"
             self._last_opacity_label = value
             self._last_opacity_chip = value
             self._opacity_ui_flush_ms = now
@@ -1139,7 +1319,7 @@ class WallpaperManagerUI:
         self._set_opacity_label(value)
         chip = self.opacity_chip.content
         assert isinstance(chip, ft.Text)
-        chip.value = f"Opacity {value}%"
+        chip.value = f"不透明度 {value}%"
         self.preview_image.opacity = max(0.28, value / 100) if draft.image_path else 1.0
         self.opacity_chip.scale = 1.0
         self._last_opacity_label = value
@@ -1241,6 +1421,7 @@ class WallpaperManagerUI:
         await self._show_toast(message, color, ok=fail_n == 0)
         await asyncio.sleep(0.45)
         self.ring_glow.border = ft.Border.all(1.5, opa(0.0, ACCENT))
+        self.apply_button.shadow = glow(0.32)
         if self.active_app == applied_app:
             self.apply_label.value = f"应用到 {applied_name}"
             self.apply_icon.name = ft.Icons.ARROW_FORWARD_ROUNDED
@@ -1282,6 +1463,7 @@ class WallpaperManagerUI:
         )
         self.preview_image.scale = 1.0
         self.preview_placeholder.visible = not has_valid_image
+        self._sync_preview_mock(has_valid_image)
         self._last_preview_src = src
         self._last_opacity_preview = opacity_ui if has_valid_image else -1
 
@@ -1293,6 +1475,7 @@ class WallpaperManagerUI:
             if has_valid_image and draft.image_path
             else ""
         )
+        self._sync_preview_mock(has_valid_image)
 
         if has_valid_image and desired_original:
             # Keep current frame until a lightweight preview is ready.
@@ -1310,7 +1493,7 @@ class WallpaperManagerUI:
         self._set_opacity_label(draft.opacity_ui)
         chip = self.opacity_chip.content
         assert isinstance(chip, ft.Text)
-        chip.value = f"Opacity {draft.opacity_ui}%"
+        chip.value = f"不透明度 {draft.opacity_ui}%"
         self._last_opacity_label = draft.opacity_ui
         self._last_opacity_chip = draft.opacity_ui
         app_chip = self.preview_app_chip.content
@@ -1365,7 +1548,7 @@ class WallpaperManagerUI:
         assert isinstance(icon, ft.Icon)
         assert isinstance(text, ft.Text)
         icon.name = ft.Icons.CHECK_CIRCLE_ROUNDED if ok else ft.Icons.ERROR_ROUNDED
-        icon.color = color if not ok else ACCENT_2
+        icon.color = color
         text.value = message
         self.toast.visible = True
         self.toast.opacity = 0
@@ -1397,6 +1580,9 @@ def main(page: ft.Page) -> None:
         highlight_color=opa(0.12, ACCENT),
     )
     page.padding = 0
+    if sys.platform == "darwin":
+        # 沉浸式：隐藏系统标题栏，渐变背景直通窗口顶部（红绿灯按钮保留）。
+        page.window.title_bar_hidden = True
     page.window.width = 1080
     page.window.height = 840
     page.window.min_width = 880
@@ -1406,6 +1592,7 @@ def main(page: ft.Page) -> None:
     if icon_path is not None:
         page.window.icon = str(icon_path)
     ui = WallpaperManagerUI(page, build_default_service())
+    page.window.on_event = ui._on_window_event
     page.add(ui.build())
     page.run_task(ui._play_entrance)
 

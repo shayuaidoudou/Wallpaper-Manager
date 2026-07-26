@@ -18,7 +18,7 @@ def test_violet_noir_theme_constants():
         "#faf5ff",
         "#a89bbf",
     )
-    assert SUCCESS == "#e9d5ff"
+    assert SUCCESS == "#5eead4"
 
 
 def test_apply_requires_installed_app_and_valid_image():

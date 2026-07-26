@@ -18,13 +18,15 @@ from wallpaper_manager.core.state_store import DEFAULT_GALLERY_DOWNLOAD_DIR
 from wallpaper_manager.ui import motion as m
 from wallpaper_manager.ui.theme import (
     ACCENT,
-    ACCENT_2,
     ERROR,
     HAIRLINE,
     MUTED,
     PANEL_BORDER,
     SUCCESS,
     TEXT,
+    accent_button,
+    back_button,
+    ghost_button,
     opa,
     shell,
 )
@@ -107,42 +109,21 @@ class SettingsPanel:
             )
             status = ft.Text(
                 self._status_text(info),
-                size=11,
+                size=12,
                 color=SUCCESS if info.exists else ERROR,
             )
             resolved = ft.Text(
                 f"将写入：{info.effective_path}" if info.effective_path else "尚未解析到配置文件",
-                size=11,
+                size=12,
                 color=MUTED,
             )
             self._fields[app_id] = field
             self._status[app_id] = status
             self._resolved[app_id] = resolved
 
-            browse = ft.Container(
-                content=ft.Text("选择目录", color=ACCENT_2, weight=ft.FontWeight.W_700),
-                padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-                border_radius=14,
-                border=ft.Border.all(1, ACCENT),
-                bgcolor=opa(0.12, ACCENT),
-                ink=False,
-            )
-            reset = ft.Container(
-                content=ft.Text("自动", color=MUTED, weight=ft.FontWeight.W_600),
-                padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-                border_radius=14,
-                border=ft.Border.all(1, PANEL_BORDER),
-                bgcolor=opa(0.4, "#120e1c"),
-                ink=False,
-            )
-            save = ft.Container(
-                content=ft.Text("保存", color=TEXT, weight=ft.FontWeight.W_700),
-                padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-                border_radius=14,
-                bgcolor=opa(0.22, ACCENT),
-                border=ft.Border.all(1, ACCENT),
-                ink=False,
-            )
+            browse = accent_button("选择目录", padding_h=14)
+            reset = ghost_button("自动", padding_h=14)
+            save = accent_button("保存", strong=True, padding_h=14)
             m.wire_pressable(
                 browse,
                 page=self.page,
@@ -189,21 +170,7 @@ class SettingsPanel:
                 )
             )
 
-        back = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.ARROW_BACK_ROUNDED, size=16, color=ACCENT_2),
-                    ft.Text("返回", color=ACCENT_2, weight=ft.FontWeight.W_700),
-                ],
-                spacing=6,
-                tight=True,
-            ),
-            padding=ft.Padding.symmetric(horizontal=14, vertical=10),
-            border_radius=999,
-            border=ft.Border.all(1, ACCENT),
-            bgcolor=opa(0.12, ACCENT),
-            ink=False,
-        )
+        back = back_button()
         m.wire_pressable(
             back,
             page=self.page,
@@ -291,16 +258,14 @@ class SettingsPanel:
                 weight=ft.FontWeight.W_600,
             )
             path_line = ft.Text(path_bit, size=11, color=MUTED)
-            restore = ft.Container(
-                content=ft.Text("恢复最近备份", color=ACCENT_2, weight=ft.FontWeight.W_700, size=12),
-                padding=ft.Padding.symmetric(horizontal=12, vertical=8),
-                border_radius=12,
-                border=ft.Border.all(1, ACCENT if row.backup_count else PANEL_BORDER),
-                bgcolor=opa(0.12, ACCENT) if row.backup_count else opa(0.2, "#120e1c"),
-                ink=False,
-                opacity=1 if row.backup_count else 0.4,
-                disabled=row.backup_count == 0,
+            restore = accent_button(
+                "恢复最近备份", size=12, padding_h=12, padding_v=8, radius=12
             )
+            if not row.backup_count:
+                restore.border = ft.Border.all(1, PANEL_BORDER)
+                restore.bgcolor = opa(0.2, "#120e1c")
+                restore.opacity = 0.4
+                restore.disabled = True
             m.wire_pressable(
                 restore,
                 page=self.page,
@@ -355,30 +320,9 @@ class SettingsPanel:
             cursor_color=ACCENT,
             expand=True,
         )
-        browse = ft.Container(
-            content=ft.Text("选择目录", color=ACCENT_2, weight=ft.FontWeight.W_700),
-            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-            border_radius=14,
-            border=ft.Border.all(1, ACCENT),
-            bgcolor=opa(0.12, ACCENT),
-            ink=False,
-        )
-        reset = ft.Container(
-            content=ft.Text("默认", color=MUTED, weight=ft.FontWeight.W_600),
-            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-            border_radius=14,
-            border=ft.Border.all(1, PANEL_BORDER),
-            bgcolor=opa(0.4, "#120e1c"),
-            ink=False,
-        )
-        save = ft.Container(
-            content=ft.Text("保存", color=TEXT, weight=ft.FontWeight.W_700),
-            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-            border_radius=14,
-            bgcolor=opa(0.22, ACCENT),
-            border=ft.Border.all(1, ACCENT),
-            ink=False,
-        )
+        browse = accent_button("选择目录", padding_h=14)
+        reset = ghost_button("默认", padding_h=14)
+        save = accent_button("保存", strong=True, padding_h=14)
         m.wire_pressable(
             browse,
             page=self.page,

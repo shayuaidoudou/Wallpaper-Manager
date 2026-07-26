@@ -21,7 +21,7 @@ MUTED = "#a89bbf"
 PANEL_BORDER = "#2a1f42"
 PANEL_BORDER_LIT = "#7c3aed"
 ERROR = "#fb7185"
-SUCCESS = "#e9d5ff"
+SUCCESS = "#5eead4"  # mint — 成功/已连接语义色，与品牌紫明确区分
 
 SPACE_XS = 6
 SPACE_SM = 10
@@ -181,26 +181,82 @@ def soft_orb(
     )
 
 
-def spark(size: float = 3, *, color: str = ACCENT_2, **pos) -> ft.Container:
+def accent_button(
+    text: str,
+    *,
+    strong: bool = False,
+    size: int = 13,
+    padding_h: int = 16,
+    padding_v: int = 12,
+    radius: float = RADIUS_CTRL,
+) -> ft.Container:
+    """统一的强调按钮。strong=True 为主操作（保存 / 设为壁纸）。"""
     return ft.Container(
-        width=size,
-        height=size,
-        border_radius=size,
-        bgcolor=opa(0.75, color),
-        shadow=[
-            ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=10,
-                color=opa(0.45, color),
-                offset=ft.Offset(0, 0),
-            )
-        ],
-        animate_opacity=ft.Animation(2200, ft.AnimationCurve.EASE_IN_OUT_SINE),
-        animate_scale=ft.Animation(2400, ft.AnimationCurve.EASE_IN_OUT_SINE),
-        opacity=0.55,
-        scale=1,
-        ignore_interactions=True,
-        **pos,
+        content=ft.Text(
+            text,
+            color=TEXT if strong else ACCENT_2,
+            weight=ft.FontWeight.W_700,
+            size=size,
+        ),
+        padding=ft.Padding.symmetric(horizontal=padding_h, vertical=padding_v),
+        border_radius=radius,
+        border=ft.Border.all(1, ACCENT if strong else opa(0.55, ACCENT)),
+        bgcolor=opa(0.22 if strong else 0.1, ACCENT),
+        alignment=ft.Alignment.CENTER,
+        ink=False,
+    )
+
+
+def ghost_button(
+    text: str,
+    *,
+    size: int = 13,
+    padding_h: int = 16,
+    padding_v: int = 12,
+    radius: float = RADIUS_CTRL,
+) -> ft.Container:
+    """统一的次要按钮（清除 / 自动 / 默认）。"""
+    return ft.Container(
+        content=ft.Text(text, color=MUTED, weight=ft.FontWeight.W_600, size=size),
+        padding=ft.Padding.symmetric(horizontal=padding_h, vertical=padding_v),
+        border_radius=radius,
+        border=ft.Border.all(1, HAIRLINE),
+        bgcolor=opa(0.35, "#120e1c"),
+        alignment=ft.Alignment.CENTER,
+        ink=False,
+    )
+
+
+def back_button() -> ft.Container:
+    """统一的「返回」胶囊按钮。"""
+    return ft.Container(
+        content=ft.Row(
+            [
+                ft.Icon(ft.Icons.ARROW_BACK_ROUNDED, size=16, color=ACCENT_2),
+                ft.Text("返回", color=ACCENT_2, weight=ft.FontWeight.W_700),
+            ],
+            spacing=6,
+            tight=True,
+        ),
+        padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+        border_radius=RADIUS_PILL,
+        border=ft.Border.all(1, ACCENT),
+        bgcolor=opa(0.12, ACCENT),
+        ink=False,
+    )
+
+
+def opacity_scale_strip() -> ft.Container:
+    """透明度语义色带：左端近乎透明 → 右端实色，呼应滑杆方向。"""
+    return ft.Container(
+        height=5,
+        border_radius=RADIUS_PILL,
+        gradient=ft.LinearGradient(
+            begin=ft.Alignment.CENTER_LEFT,
+            end=ft.Alignment.CENTER_RIGHT,
+            colors=[opa(0.05, "#ffffff"), opa(0.4, ACCENT), ACCENT],
+        ),
+        border=ft.Border.all(1, HAIRLINE),
     )
 
 
