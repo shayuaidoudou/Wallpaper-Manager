@@ -250,8 +250,7 @@ def test_build_default_service_wires_all_real_adapters():
     assert [type(adapter) for adapter in service.adapters] == [
         VsCodeAdapter,
         CursorAdapter,
-        JetBrainsAdapter,
-        JetBrainsAdapter,
+        *([JetBrainsAdapter] * 8),
         GhosttyAdapter,
     ]
     assert [adapter.app_id for adapter in service.adapters] == list(AppId)
