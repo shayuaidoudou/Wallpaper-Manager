@@ -15,7 +15,7 @@
 
 ![主界面 — 双栏布局、实时预览与编辑器模拟层](docs/screenshots/main.png)
 
-![Ghostty — 终端模拟预览](docs/screenshots/ghostty.png)
+![在线图库 — 浏览分类缩略图，一键下载并设为壁纸](docs/screenshots/gallery.png)
 
 ## 下载体验（macOS）
 
