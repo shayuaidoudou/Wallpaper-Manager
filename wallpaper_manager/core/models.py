@@ -5,6 +5,7 @@ from enum import Enum
 
 
 class AppId(str, Enum):
+    DESKTOP = "desktop"
     VSCODE = "vscode"
     CURSOR = "cursor"
     IDEA = "idea"

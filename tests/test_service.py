@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image
 
 from wallpaper_manager.adapters.cursor import CursorAdapter
+from wallpaper_manager.adapters.desktop import DesktopAdapter
 from wallpaper_manager.adapters.ghostty import GhosttyAdapter
 from wallpaper_manager.adapters.jetbrains import JetBrainsAdapter
 from wallpaper_manager.adapters.vscode import VsCodeAdapter
@@ -248,6 +249,7 @@ def test_build_default_service_wires_all_real_adapters():
     service = build_default_service()
 
     assert [type(adapter) for adapter in service.adapters] == [
+        DesktopAdapter,
         VsCodeAdapter,
         CursorAdapter,
         *([JetBrainsAdapter] * 8),

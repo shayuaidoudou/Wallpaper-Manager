@@ -6,6 +6,7 @@ from pathlib import Path
 
 from wallpaper_manager.adapters.base import WallpaperAdapter
 from wallpaper_manager.adapters.cursor import CursorAdapter
+from wallpaper_manager.adapters.desktop import DesktopAdapter
 from wallpaper_manager.adapters.ghostty import GhosttyAdapter
 from wallpaper_manager.adapters.jetbrains import JetBrainsAdapter
 from wallpaper_manager.adapters.vscode import VsCodeAdapter
@@ -127,6 +128,7 @@ class WallpaperService:
             )
 
         # Real adapters expose effective_config_path; test doubles may omit it.
+        # Desktop has no config file — skip path checks when the API is absent.
         if has_path_api:
             if config_path is None:
                 return PrecheckResult(
@@ -147,6 +149,8 @@ class WallpaperService:
                 )
 
         warning = self.extension_tip(app_id)
+        if app_id is AppId.DESKTOP and warning is None:
+            warning = "系统桌面壁纸不支持透明度调节，该滑块仅影响本应用预览"
         return PrecheckResult(
             ok=True,
             warning=warning,
@@ -298,6 +302,9 @@ class WallpaperService:
             return "已写入，但回读未看到壁纸路径（部分应用需重启后生效）"
         if Path(actual).resolve() != Path(expected).resolve():
             return "已写入，但回读路径不一致，配置可能被 IDE 覆盖"
+        # Desktop wallpaper has no OS-level opacity; skip opacity verification.
+        if getattr(adapter, "app_id", None) is AppId.DESKTOP:
+            return None
         if int(read_opacity) != int(opacity_ui):
             return "已写入，但透明度回读不一致"
         return None
@@ -484,6 +491,7 @@ class WallpaperService:
 def build_default_service() -> WallpaperService:
     return WallpaperService(
         [
+            DesktopAdapter(),
             VsCodeAdapter(),
             CursorAdapter(),
             *(JetBrainsAdapter(app_id) for app_id in JETBRAINS_APP_IDS),

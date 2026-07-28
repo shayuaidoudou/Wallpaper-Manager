@@ -55,6 +55,7 @@ from wallpaper_manager.ui.theme import (
 )
 
 APP_NAMES = {
+    AppId.DESKTOP: "桌面",
     AppId.VSCODE: "VS Code",
     AppId.CURSOR: "Cursor",
     AppId.IDEA: "IDEA",
@@ -90,6 +91,8 @@ def normalize_image_path(image_path: str) -> str:
 
 
 def apply_success_message(app_id: AppId) -> str:
+    if app_id is AppId.DESKTOP:
+        return f"已应用到 {APP_NAMES[app_id]}。系统桌面壁纸应立即生效。"
     if app_id in (AppId.VSCODE, AppId.CURSOR):
         return (
             f"已应用到 {APP_NAMES[app_id]}。"
@@ -570,8 +573,10 @@ class WallpaperManagerUI:
         )
 
     def _sync_preview_mock(self, has_image: bool) -> None:
+        is_desktop = self.active_app is AppId.DESKTOP
         is_terminal = self.active_app is AppId.GHOSTTY
-        self.editor_mock.visible = has_image and not is_terminal
+        # Desktop shows bare wallpaper preview without editor/terminal mock layers.
+        self.editor_mock.visible = has_image and not is_terminal and not is_desktop
         self.terminal_mock.visible = has_image and is_terminal
 
     @staticmethod

@@ -19,6 +19,7 @@ from wallpaper_manager.detect.paths import (
 
 # Exact file we ultimately write.
 CONFIG_FILE_LABELS = {
+    AppId.DESKTOP: "系统桌面壁纸（无配置文件）",
     AppId.VSCODE: "settings.json",
     AppId.CURSOR: "settings.json",
     AppId.IDEA: "other.xml",
@@ -27,6 +28,7 @@ CONFIG_FILE_LABELS = {
 }
 
 _DIR_HINTS_DARWIN = {
+    AppId.DESKTOP: "由 macOS 系统桌面管理，无需选择配置目录",
     AppId.VSCODE: "~/Library/Application Support/Code （或其中的 User 目录）",
     AppId.CURSOR: "~/Library/Application Support/Cursor （或其中的 User 目录）",
     AppId.IDEA: "~/Library/Application Support/JetBrains/IntelliJIdea* 版本目录",
@@ -35,6 +37,7 @@ _DIR_HINTS_DARWIN = {
 }
 
 _DIR_HINTS_WIN32 = {
+    AppId.DESKTOP: "由 Windows 桌面管理，无需选择配置目录",
     AppId.VSCODE: r"%APPDATA%\Code （或其中的 User 目录）",
     AppId.CURSOR: r"%APPDATA%\Cursor （或其中的 User 目录）",
     AppId.IDEA: r"%APPDATA%\JetBrains\IntelliJIdea* 版本目录",
@@ -43,6 +46,7 @@ _DIR_HINTS_WIN32 = {
 }
 
 _PATH_HINTS_DARWIN = {
+    AppId.DESKTOP: "System Events → desktop picture",
     AppId.VSCODE: "~/Library/Application Support/Code/User/settings.json",
     AppId.CURSOR: "~/Library/Application Support/Cursor/User/settings.json",
     AppId.IDEA: "~/Library/Application Support/JetBrains/IntelliJIdea*/options/other.xml",
@@ -51,6 +55,7 @@ _PATH_HINTS_DARWIN = {
 }
 
 _PATH_HINTS_WIN32 = {
+    AppId.DESKTOP: r"HKCU\Control Panel\Desktop\WallPaper",
     AppId.VSCODE: r"%APPDATA%\Code\User\settings.json",
     AppId.CURSOR: r"%APPDATA%\Cursor\User\settings.json",
     AppId.IDEA: r"%APPDATA%\JetBrains\IntelliJIdea*\options\other.xml",
@@ -122,6 +127,8 @@ def data_root_guidance() -> str:
 
 
 def auto_config_path(app_id: AppId) -> Path | None:
+    if app_id is AppId.DESKTOP:
+        return None
     if app_id is AppId.VSCODE:
         return vscode_settings_path()
     if app_id is AppId.CURSOR:
@@ -222,6 +229,8 @@ def resolve_config_from_user_selection(
 
     Returns (resolved_path, error_message).
     """
+    if app_id is AppId.DESKTOP:
+        return None, "系统桌面壁纸由操作系统管理，无需配置路径"
     raw = Path(str(selected)).expanduser()
     try:
         path = raw.resolve()

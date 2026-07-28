@@ -62,6 +62,7 @@ def test_find_newest_goland_dir(tmp_path: Path, monkeypatch):
 
 def test_tab_order_keeps_ghostty_last():
     order = list(AppId)
-    assert order[0] is AppId.VSCODE
+    assert order[0] is AppId.DESKTOP
+    assert order[1] is AppId.VSCODE
     assert order[-1] is AppId.GHOSTTY
-    assert len(order) == 11
+    assert len(order) == 12

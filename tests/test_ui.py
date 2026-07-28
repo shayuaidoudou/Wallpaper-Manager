@@ -32,9 +32,11 @@ def test_apply_requires_installed_app_and_valid_image():
 
 
 def test_success_message_has_target_specific_reload_hint():
+    assert "桌面" in apply_success_message(AppId.DESKTOP)
     assert "Reload Window" in apply_success_message(AppId.VSCODE)
     assert "重新启动 IDE" in apply_success_message(AppId.IDEA)
     assert "Ghostty" in apply_success_message(AppId.GHOSTTY)
+    assert APP_NAMES[AppId.DESKTOP] == "桌面"
     assert APP_NAMES[AppId.PYCHARM] == "PyCharm"
     assert APP_NAMES[AppId.GHOSTTY] == "Ghostty"
     assert APP_NAMES[AppId.WEBSTORM] == "WebStorm"

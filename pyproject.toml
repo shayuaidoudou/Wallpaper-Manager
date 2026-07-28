@@ -1,7 +1,7 @@
 [project]
 name = "wallpaper-manager"
-version = "0.5.0"
-description = "Unified wallpaper manager for VS Code, Cursor, the JetBrains family, and Ghostty"
+version = "0.6.0"
+description = "Unified wallpaper manager for system desktop, VS Code, Cursor, the JetBrains family, and Ghostty"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

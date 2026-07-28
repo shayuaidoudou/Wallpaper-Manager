@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#支持的应用)
 
-**统一管理多个 IDE / 终端背景的本地小工具。**
+**统一管理系统桌面与多个 IDE / 终端背景的本地小工具。**
 
-在一个界面里，为 VS Code、Cursor、JetBrains 全家桶（IDEA / PyCharm / WebStorm / PhpStorm / GoLand / CLion / Rider / DataGrip）与 Ghostty 分别选图、调透明度并一键写入各自配置——不用再翻各个应用的设置文件。
+在一个界面里，为 macOS / Windows 系统桌面、VS Code、Cursor、JetBrains 全家桶（IDEA / PyCharm / WebStorm / PhpStorm / GoLand / CLion / Rider / DataGrip）与 Ghostty 分别选图、调透明度并一键写入各自配置——不用再翻各个应用的设置文件。
 
 > Author: [shayuaidoudou](https://github.com/shayuaidoudou) · 个人小站：[鲨鱼爱兜兜的小站](https://blog.shayuaidoudou.store/)
 
@@ -47,9 +47,9 @@ Wallpaper Manager 把这些收成一套：**选应用 → 选图 → 调透明�
 
 ## 功能一览
 
-- **多应用统一入口**：11 款编辑器 / 终端在同一窗口切换管理
-- **按应用独立配置**：图片与透明度互不覆盖
-- **在线图库**：浏览分类缩略图，一键下载并设为当前 IDE 壁纸
+- **多应用统一入口**：系统桌面 + 11 款编辑器 / 终端在同一窗口切换管理
+- **按应用独立配置**：图片与透明度互不覆盖（系统桌面不支持透明度）
+- **在线图库**：浏览分类缩略图，一键下载并设为当前目标壁纸
 - **收藏与历史**：应用记录自动留存，图库可收藏，一键回切
 - **多应用同步**：勾选后将当前图片与透明度同步到其他已安装应用
 - **应用前预检 / 应用后回读**：减少「点了没用」；回读不一致会提示
@@ -63,6 +63,7 @@ Wallpaper Manager 把这些收成一套：**选应用 → 选图 → 调透明�
 
 | 应用 | 写入目标 | macOS | Windows |
 |------|----------|-------|---------|
+| 系统桌面 | macOS System Events / Windows SPI | ✓ | ✓ |
 | VS Code | `settings.json`（Background Cover） | ✓ | ✓ |
 | Cursor | `settings.json` + CSS 同步 | ✓ | ✓ |
 | IntelliJ IDEA | `options/other.xml` | ✓ | ✓ |
@@ -101,6 +102,7 @@ python -m wallpaper_manager
 
 ### 使用前注意
 
+- **系统桌面**：直接替换 OS 桌面壁纸；不支持透明度，清除在 macOS 上仅清除本工具记录（不会强制恢复系统默认图）  
 - **VS Code / Cursor**：需安装 [Background Cover](https://marketplace.visualstudio.com/items?itemName=manasxx.background-cover)（`manasxx.background-cover`）扩展才能真正显示壁纸  
 - **JetBrains**：应用后如未立即生效，请重启 IDE  
 - **Ghostty**：多数外观项可自动重载；未生效时可完全退出后重开  
