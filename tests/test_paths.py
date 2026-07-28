@@ -71,3 +71,27 @@ def test_ghostty_falls_back_to_xdg_config(tmp_path: Path, monkeypatch):
     config.write_text("font-size = 14\n", encoding="utf-8")
 
     assert find_ghostty_config(tmp_path) == config
+
+
+def test_linux_paths_use_xdg_layout(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("wallpaper_manager.detect.paths.sys.platform", "linux")
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+    assert (
+        vscode_settings_path(tmp_path)
+        == tmp_path / ".config/Code/User/settings.json"
+    )
+    assert (
+        cursor_settings_path(tmp_path)
+        == tmp_path / ".config/Cursor/User/settings.json"
+    )
+    assert ghostty_config_candidates(tmp_path) == [
+        tmp_path / ".config/ghostty/config.ghostty",
+        tmp_path / ".config/ghostty/config",
+    ]
+
+    root = tmp_path / ".config/JetBrains"
+    product = root / "IntelliJIdea2025.2/options"
+    product.mkdir(parents=True)
+    (product / "other.xml").write_text("<app/>", encoding="utf-8")
+    assert find_jetbrains_other_xml("IntelliJIdea", tmp_path) == product / "other.xml"

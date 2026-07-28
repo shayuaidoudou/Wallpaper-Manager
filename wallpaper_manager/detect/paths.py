@@ -10,6 +10,10 @@ def _home(home: Path | None) -> Path:
     return home if home is not None else Path.home()
 
 
+def _xdg_config_home(home: Path) -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config")))
+
+
 def vscode_settings_path(home: Path | None = None) -> Path:
     h = _home(home)
     if sys.platform == "darwin":
@@ -17,7 +21,8 @@ def vscode_settings_path(home: Path | None = None) -> Path:
     if sys.platform == "win32":
         appdata = Path(os.environ.get("APPDATA", str(h / "AppData/Roaming")))
         return appdata / "Code/User/settings.json"
-    raise RuntimeError(f"Unsupported platform: {sys.platform}")
+    # Linux / other: XDG layout used by official VS Code packages.
+    return _xdg_config_home(h) / "Code/User/settings.json"
 
 
 def cursor_settings_path(home: Path | None = None) -> Path:
@@ -27,7 +32,7 @@ def cursor_settings_path(home: Path | None = None) -> Path:
     if sys.platform == "win32":
         appdata = Path(os.environ.get("APPDATA", str(h / "AppData/Roaming")))
         return appdata / "Cursor/User/settings.json"
-    raise RuntimeError(f"Unsupported platform: {sys.platform}")
+    return _xdg_config_home(h) / "Cursor/User/settings.json"
 
 
 def jetbrains_support_root(home: Path | None = None) -> Path:
@@ -37,7 +42,7 @@ def jetbrains_support_root(home: Path | None = None) -> Path:
     if sys.platform == "win32":
         appdata = Path(os.environ.get("APPDATA", str(h / "AppData/Roaming")))
         return appdata / "JetBrains"
-    raise RuntimeError(f"Unsupported platform: {sys.platform}")
+    return _xdg_config_home(h) / "JetBrains"
 
 
 def find_jetbrains_other_xml(product_prefix: str, home: Path | None = None) -> Path | None:
@@ -60,10 +65,9 @@ def find_jetbrains_other_xml(product_prefix: str, home: Path | None = None) -> P
 
 
 def ghostty_config_candidates(home: Path | None = None) -> list[Path]:
-    """Ghostty search order: macOS app support first, then XDG."""
+    """Ghostty search order: platform app support first, then XDG."""
     h = _home(home)
-    xdg_root = Path(os.environ.get("XDG_CONFIG_HOME", str(h / ".config")))
-    xdg = xdg_root / "ghostty"
+    xdg = _xdg_config_home(h) / "ghostty"
     if sys.platform == "darwin":
         support = h / "Library/Application Support/com.mitchellh.ghostty"
         return [
@@ -80,7 +84,11 @@ def ghostty_config_candidates(home: Path | None = None) -> list[Path]:
             xdg / "config.ghostty",
             xdg / "config",
         ]
-    raise RuntimeError(f"Unsupported platform: {sys.platform}")
+    # Linux and other Unix: XDG only.
+    return [
+        xdg / "config.ghostty",
+        xdg / "config",
+    ]
 
 
 def find_ghostty_config(home: Path | None = None) -> Path:

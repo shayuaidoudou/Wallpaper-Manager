@@ -390,8 +390,16 @@ class WallpaperService:
         adapter = self._adapters[app_id]
         overrides = self.store.load_path_overrides()
         override = overrides.get(app_id)
-        auto = getattr(adapter, "auto_detected_path", lambda: auto_config_path(app_id))()
-        effective = getattr(adapter, "effective_config_path", lambda: auto)()
+        try:
+            auto = getattr(
+                adapter, "auto_detected_path", lambda: auto_config_path(app_id)
+            )()
+        except Exception:
+            auto = None
+        try:
+            effective = getattr(adapter, "effective_config_path", lambda: auto)()
+        except Exception:
+            effective = Path(override).expanduser() if override else auto
         auto_str = str(auto) if auto is not None else None
         effective_str = str(effective) if effective is not None else None
         exists = bool(effective and Path(effective).expanduser().exists())
