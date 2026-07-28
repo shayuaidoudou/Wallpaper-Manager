@@ -90,6 +90,11 @@ def normalize_image_path(image_path: str) -> str:
     return str(Path(image_path).expanduser().resolve())
 
 
+def supports_opacity(app_id: AppId) -> bool:
+    """System desktop wallpaper has no OS-level opacity control."""
+    return app_id is not AppId.DESKTOP
+
+
 def apply_success_message(app_id: AppId) -> str:
     if app_id is AppId.DESKTOP:
         return f"已应用到 {APP_NAMES[app_id]}。系统桌面壁纸应立即生效。"
@@ -363,6 +368,32 @@ class WallpaperManagerUI:
                     offset=ft.Offset(0, 4),
                 )
             ],
+        )
+        self.opacity_hint = ft.Text(
+            "0% 完全透明 · 100% 完全不透明 · 编辑器主题底色会透出",
+            size=12,
+            color=MUTED,
+        )
+        self.opacity_block = ft.Column(
+            [
+                micro_label("不透明度"),
+                self.opacity_slider_well,
+                self.opacity_hint,
+            ],
+            spacing=SPACE_SM,
+            visible=True,
+        )
+        self.desktop_opacity_note = ft.Container(
+            content=ft.Text(
+                "系统桌面壁纸不支持透明度调节，将以原图完整不透明写入。",
+                size=12,
+                color=MUTED,
+            ),
+            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
+            border_radius=16,
+            bgcolor=TRACK,
+            border=ft.Border.all(1, HAIRLINE),
+            visible=False,
         )
         self.clear_button = ghost_button("清除", padding_h=20, radius=RADIUS_PILL)
         self.clear_button.animate_opacity = m.SNAP
@@ -890,13 +921,8 @@ class WallpaperManagerUI:
                 micro_label("图片来源"),
                 ft.Row([self.path_field, self.browse_button], spacing=SPACE_SM),
                 ft.Container(height=SPACE_SM),
-                micro_label("不透明度"),
-                self.opacity_slider_well,
-                ft.Text(
-                    "0% 完全透明 · 100% 完全不透明 · 编辑器主题底色会透出",
-                    size=12,
-                    color=MUTED,
-                ),
+                self.opacity_block,
+                self.desktop_opacity_note,
                 self.sync_row,
                 ft.Container(height=SPACE_SM),
                 action_bar,
@@ -1293,6 +1319,8 @@ class WallpaperManagerUI:
         self.page.update()
 
     def _on_opacity_change(self, event: ft.ControlEvent) -> None:
+        if not supports_opacity(self.active_app):
+            return
         draft = self.drafts[self.active_app]
         value = int(round(event.control.value or 0))
         draft.opacity_ui = value
@@ -1314,7 +1342,9 @@ class WallpaperManagerUI:
         if value != self._last_opacity_preview and (
             now - self._opacity_preview_flush_ms >= 50 or value in (0, 100)
         ):
-            self.preview_image.opacity = max(0.28, value / 100)
+            self.preview_image.opacity = self._preview_opacity_value(
+                value, has_image=bool(draft.image_path)
+            )
             self._last_opacity_preview = value
             self._opacity_preview_flush_ms = now
             self.opacity_chip.scale = 1.04
@@ -1323,6 +1353,9 @@ class WallpaperManagerUI:
             self.page.update()
 
     def _on_opacity_settle(self, event: ft.ControlEvent) -> None:
+        if not supports_opacity(self.active_app):
+            self._opacity_drag = False
+            return
         draft = self.drafts[self.active_app]
         value = int(round(getattr(event.control, "value", None) or draft.opacity_ui))
         draft.opacity_ui = value
@@ -1331,7 +1364,9 @@ class WallpaperManagerUI:
         chip = self.opacity_chip.content
         assert isinstance(chip, ft.Text)
         chip.value = f"不透明度 {value}%"
-        self.preview_image.opacity = max(0.28, value / 100) if draft.image_path else 1.0
+        self.preview_image.opacity = self._preview_opacity_value(
+            value, has_image=bool(draft.image_path)
+        )
         self.opacity_chip.scale = 1.0
         self._last_opacity_label = value
         self._last_opacity_chip = value
@@ -1456,10 +1491,28 @@ class WallpaperManagerUI:
         draft = self.drafts[self.active_app]
         self.path_field.value = draft.image_path or ""
         self.opacity_slider.value = draft.opacity_ui
+        self._sync_opacity_controls()
         self._refresh_preview(animate_image=animate_preview)
+
+    def _sync_opacity_controls(self) -> None:
+        """Hide opacity controls for system desktop; show a short note instead."""
+        desktop = not supports_opacity(self.active_app)
+        self.opacity_block.visible = not desktop
+        self.desktop_opacity_note.visible = desktop
+        self.opacity_chip.visible = not desktop
+        if desktop:
+            chip = self.opacity_chip.content
+            assert isinstance(chip, ft.Text)
+            chip.value = "完整不透明"
+            self.opacity_chip.scale = 1.0
 
     def _set_opacity_label(self, value: int) -> None:
         self.opacity_label.value = f"{value}%"
+
+    def _preview_opacity_value(self, opacity_ui: int, *, has_image: bool) -> float:
+        if not has_image or not supports_opacity(self.active_app):
+            return 1.0
+        return max(0.28, opacity_ui / 100)
 
     def _preview_source_for(self, image_path: str | None) -> str:
         if not image_path:
@@ -1469,8 +1522,8 @@ class WallpaperManagerUI:
     def _apply_preview_src(self, src: str, opacity_ui: int, *, has_valid_image: bool) -> None:
         self.preview_image.src = src
         self.preview_image.visible = has_valid_image
-        self.preview_image.opacity = (
-            max(0.28, opacity_ui / 100) if has_valid_image else 1.0
+        self.preview_image.opacity = self._preview_opacity_value(
+            opacity_ui, has_image=has_valid_image
         )
         self.preview_image.scale = 1.0
         self.preview_placeholder.visible = not has_valid_image
@@ -1487,6 +1540,7 @@ class WallpaperManagerUI:
             else ""
         )
         self._sync_preview_mock(has_valid_image)
+        self._sync_opacity_controls()
 
         if has_valid_image and desired_original:
             # Keep current frame until a lightweight preview is ready.
@@ -1504,7 +1558,10 @@ class WallpaperManagerUI:
         self._set_opacity_label(draft.opacity_ui)
         chip = self.opacity_chip.content
         assert isinstance(chip, ft.Text)
-        chip.value = f"不透明度 {draft.opacity_ui}%"
+        if supports_opacity(self.active_app):
+            chip.value = f"不透明度 {draft.opacity_ui}%"
+        else:
+            chip.value = "完整不透明"
         self._last_opacity_label = draft.opacity_ui
         self._last_opacity_chip = draft.opacity_ui
         app_chip = self.preview_app_chip.content

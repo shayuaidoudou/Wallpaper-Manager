@@ -5,6 +5,7 @@ from wallpaper_manager.ui.app import (
     apply_success_message,
     can_apply,
     normalize_image_path,
+    supports_opacity,
 )
 from wallpaper_manager.ui.theme import ACCENT, ACCENT_2, BG, MUTED, PANEL, SUCCESS, TEXT
 
@@ -41,6 +42,12 @@ def test_success_message_has_target_specific_reload_hint():
     assert APP_NAMES[AppId.GHOSTTY] == "Ghostty"
     assert APP_NAMES[AppId.WEBSTORM] == "WebStorm"
     assert set(APP_NAMES) == set(AppId)
+
+
+def test_desktop_does_not_support_opacity_control():
+    assert supports_opacity(AppId.DESKTOP) is False
+    assert supports_opacity(AppId.VSCODE) is True
+    assert supports_opacity(AppId.GHOSTTY) is True
 
 
 def test_normalize_image_path_returns_resolved_absolute_path(tmp_path, monkeypatch):
